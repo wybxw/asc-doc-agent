@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# 索引产物（可重建）
+data/*.db
+data/*.db-wal
+data/*.db-shm
+data/ut_out/
+data/_probe_*.py
+
+# 本地环境
+.env
+*.log
+
+# 编辑器
+.vscode/
+.idea/
+.DS_Store
+
+# 上游资料仓：作为只读数据源存在，不纳入本仓版本管理
+# （它自带 .git 与 git-lfs 规则，纳入会被当成 submodule/gitlink 处理）
+asc-devkit/
