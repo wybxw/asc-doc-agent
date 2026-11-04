@@ -15,7 +15,7 @@ python scripts/run_demo.py     # 重新生成本页
 
 ### Exp 在 910b 上支持吗
 
-- 工作流: `chip_support` ｜ 轮数: 2 ｜ 工具: api_support ｜ 耗时: 9ms
+- 工作流: `chip_support` ｜ 轮数: 2 ｜ 工具: api_support ｜ 耗时: 8ms
 
 <details><summary>回答</summary>
 
@@ -80,7 +80,7 @@ python scripts/run_demo.py     # 重新生成本页
 
 ### Cast 怎么用
 
-- 工作流: `lookup_api` ｜ 轮数: 2 ｜ 工具: api_card ｜ 耗时: 7ms
+- 工作流: `lookup_api` ｜ 轮数: 2 ｜ 工具: api_card ｜ 耗时: 6ms
 
 <details><summary>回答</summary>
 
@@ -227,7 +227,7 @@ description: AscendC API 单元测试技能。当用户需要为新 API 编写 U
 
 ### 有没有 cast 的样例
 
-- 工作流: `locate_code` ｜ 轮数: 2 ｜ 工具: find_examples ｜ 耗时: 217ms
+- 工作流: `locate_code` ｜ 轮数: 2 ｜ 工具: find_examples ｜ 耗时: 150ms
 
 <details><summary>回答</summary>
 
