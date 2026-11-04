@@ -102,12 +102,15 @@ def search_docs(
     )
     if err:
         return err
+    # 芯片名先归一成文档标签口径（`910b` → `ascend910b`），否则 chips 列存的是
+    # 标签名，直接拿用户口语去 LIKE 会一条都匹配不上。
+    chip_tag = facts.normalize_tag(args["chip"]) if args["chip"] else None
     hits = get_retriever().search(
         args["query"],
         top_k=args["top_k"],
         kind=None if args["kind"] == "any" else args["kind"],
         category=args["category"],
-        chip=facts.normalize_tag(args["chip"]) or args["chip"] if args["chip"] else None,
+        chip=chip_tag or args["chip"] or None,
     )
     out = [h.to_dict() for h in hits]
     return {

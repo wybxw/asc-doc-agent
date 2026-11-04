@@ -15,7 +15,7 @@ python scripts/run_demo.py     # 重新生成本页
 
 ### Exp 在 910b 上支持吗
 
-- 工作流: `chip_support` ｜ 轮数: 2 ｜ 工具: api_support ｜ 耗时: 11ms
+- 工作流: `chip_support` ｜ 轮数: 2 ｜ 工具: api_support ｜ 耗时: 9ms
 
 <details><summary>回答</summary>
 
@@ -80,7 +80,7 @@ python scripts/run_demo.py     # 重新生成本页
 
 ### Cast 怎么用
 
-- 工作流: `lookup_api` ｜ 轮数: 2 ｜ 工具: api_card ｜ 耗时: 8ms
+- 工作流: `lookup_api` ｜ 轮数: 2 ｜ 工具: api_card ｜ 耗时: 7ms
 
 <details><summary>回答</summary>
 
@@ -157,7 +157,7 @@ cpp
 
 ### Ascend 950 的架构号是多少
 
-- 工作流: `自动` ｜ 轮数: 2 ｜ 工具: chip_facts ｜ 耗时: 5ms
+- 工作流: `自动` ｜ 轮数: 2 ｜ 工具: chip_facts ｜ 耗时: 4ms
 
 <details><summary>回答</summary>
 
@@ -188,7 +188,7 @@ cpp
 
 ### UT 怎么生成
 
-- 工作流: `gen_ut` ｜ 轮数: 2 ｜ 工具: read_skill ｜ 耗时: 6ms
+- 工作流: `gen_ut` ｜ 轮数: 2 ｜ 工具: read_skill ｜ 耗时: 5ms
 
 <details><summary>回答</summary>
 
@@ -227,7 +227,7 @@ description: AscendC API 单元测试技能。当用户需要为新 API 编写 U
 
 ### 有没有 cast 的样例
 
-- 工作流: `locate_code` ｜ 轮数: 2 ｜ 工具: find_examples ｜ 耗时: 230ms
+- 工作流: `locate_code` ｜ 轮数: 2 ｜ 工具: find_examples ｜ 耗时: 217ms
 
 <details><summary>回答</summary>
 

@@ -132,11 +132,11 @@ python -m asc_agent chat            # 多轮
 ## 6. 测试
 
 ```bash
-python -m pytest tests/ -q          # 83 passed
+python -m pytest tests/ -q          # 90 passed
 ```
 
-- `tests/test_retriever.py`（23）— 分词、排序回归、卡片兜底、支持矩阵粒度
-- `tests/test_tools.py`（42）— 参数校验、错误兜底、lint 各条规则、并发线程安全
+- `tests/test_retriever.py`（24）— 分词、排序回归、卡片兜底、支持矩阵粒度、芯片过滤
+- `tests/test_tools.py`（48）— 参数校验、错误兜底、lint 各条规则、并发线程安全、UT 生成
 - `tests/test_agent_e2e.py`（18）— **真起 MCP server、真走 HTTP**、编排循环控制流
 
 ## 7. 目录

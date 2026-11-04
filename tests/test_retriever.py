@@ -86,6 +86,22 @@ def test_search_respects_kind_filter(retriever: Retriever):
     assert all(h.kind == "guide" for h in hits)
 
 
+def test_search_chip_filter_uses_support_matrix(retriever: Retriever):
+    """芯片过滤要看「该芯片被标为支持」，而不是「文档里提到过该芯片」。
+
+    regbase 版 Abs 只在 ascend950 上支持，`chips` 列却因为参数说明里有
+    `npu="950"` 之外的标签而带上别的芯片；用 doc_support 过滤才能把它在
+    ascend910b 的查询里排除掉。
+    """
+    on_910b = retriever.search("Abs 取绝对值", top_k=5, kind="api_doc", chip="ascend910b")
+    paths = [h.path for h in on_910b]
+    assert paths, "910b 上应该还有 memory_vector_compute 版 Abs"
+    assert not any("reg_vector_compute" in p for p in paths), paths
+
+    on_950 = retriever.search("Abs 取绝对值", top_k=5, kind="api_doc", chip="ascend950")
+    assert any("reg_vector_compute" in h.path for h in on_950), "950 应能召回 regbase 版"
+
+
 def test_search_empty_query_returns_nothing(retriever: Retriever):
     assert retriever.search("   ") == []
 

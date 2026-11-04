@@ -359,8 +359,19 @@ class Retriever:
             sql.append("AND d.category LIKE ?")
             params.append(f"%{category}%")
         if chip:
-            sql.append("AND (d.chips LIKE ? OR d.kind != 'api_doc')")
-            params.append(f"%{chip}%")
+            # `d.chips` 是文档里所有 npu 标签的并集，用它 LIKE 过滤等于
+            # 「文档提到过该芯片」——`Exp.md` 因为参数说明里有一处 `npu="950"`
+            # 就会命中所有芯片查询。真正的判据在 doc_support：该芯片在这篇文档
+            # 的产品支持情况里**被标为支持**才保留。
+            sql.append(
+                "AND ("
+                "  d.kind != 'api_doc'"
+                "  OR EXISTS (SELECT 1 FROM doc_support s"
+                "             WHERE s.doc_id = d.id AND s.chip = ? AND s.supported = 1)"
+                "  OR NOT EXISTS (SELECT 1 FROM doc_support s2 WHERE s2.doc_id = d.id)"
+                ")"
+            )
+            params.append(chip)
         sql.append("ORDER BY bm LIMIT ?")
         params.append(max(top_k * 8, 60))
         try:
