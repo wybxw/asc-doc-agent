@@ -1,0 +1,23 @@
+%% 图 6  个人知识卡片：现有卡片与其关系
+flowchart TB
+  subgraph G["当前卡片图（每张都带 evidence 指回官方文档）"]
+    direction LR
+    A["csv-support-path-format<br/>constraint · 作用域：通用"]
+    B["exp-support-differs-by-impl-dir<br/>feature · 作用域：API=Exp"]
+    C["deinterleave-on-910b-via-gathermask<br/>technique · draft · 架构 2201 / 910B"]
+    DOC["官方文档 GatherMask.md<br/>「模式 1/2 取偶数/奇数索引」"]
+    A ---|related| B
+    B ---|related| C
+    C ==>|evidence| DOC
+  end
+
+  subgraph LEG["7 种关系，每条自动生成反向边"]
+    direction LR
+    L1["refines / generalizes<br/>特化 ↔ 泛化"]
+    L2["depends_on<br/>前提"]
+    L3["supersedes<br/>新结论取代旧"]
+    L4["contradicts<br/>冲突待人裁决"]
+    L5["alternative / related<br/>备选 / 弱关联"]
+  end
+
+  G ~~~ LEG

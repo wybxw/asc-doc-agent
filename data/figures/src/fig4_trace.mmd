@@ -1,0 +1,19 @@
+%% 图 4  一次真实问答的时序与耗时（实测输出，非示意）
+sequenceDiagram
+    autonumber
+    participant U as 用户
+    participant A as Agent
+    participant S as MCP Server
+    participant L as LLM
+
+    U->>A: ask "asc_deintlv 在 910b 上支持吗"
+    A->>S: 起本地 server，tools/list（19 个工具）
+    S-->>A: JSON Schema → OpenAI tools
+    A->>L: 提问 + 工具定义
+    L-->>A: tool_call api_support(asc_deintlv, ascend910b)
+    A->>S: tools/call
+    S-->>A: 3 篇同名文档均「不支持」+ CSV status=no + 原生接口仅 950 支持
+    A->>L: 结果回灌
+    L-->>A: 结论 + 依据 + 出处
+    A-->>U: 答案 + trace
+    Note over U,L: 实测：2 轮 · 2 次工具调用 · 6.9 s · 22 001 token<br/>同一台机器上较难的 deinterleave 问题为 6 轮 · 12 次调用 · 27.7 s

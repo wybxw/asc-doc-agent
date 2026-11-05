@@ -1,0 +1,23 @@
+%% 图 1  三层解耦：编排层 / MCP 桥 / MCP Server
+flowchart LR
+  subgraph AG["① 编排层"]
+    P1["system prompt<br/>纪律 + 输出契约"]
+    P2["8 个工作流路由"]
+    P3["工具循环 ≤8 轮"]
+    P4["trace 轮数/耗时/token"]
+  end
+
+  BR["② MCP 客户端桥<br/>streamable-http"]
+
+  subgraph MS["③ MCP Server"]
+    T13["13 个只读资料工具"]
+    T6["6 个知识卡片工具"]
+  end
+
+  D["资料层<br/>3676 文档<br/>27355 片段<br/>2889 API 卡片"]
+  K["knowledge/cards<br/>YAML + 7 种关系"]
+
+  AG -->|"function calling"| BR
+  BR --> MS
+  MS -->|"读索引 / 读文件"| D
+  MS -->|"card_* 工具"| K

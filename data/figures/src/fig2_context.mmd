@@ -1,0 +1,20 @@
+%% 图 2  上下文集成：一次提问里 MCP 承担的全部上下文搬运
+sequenceDiagram
+    autonumber
+    participant U as 用户
+    participant CLI as asc_agent CLI
+    participant S as MCP Server
+    participant L as LLM
+
+    U->>CLI: ask "asc_deintlv 在 910b 上支持吗"
+    CLI->>S: initialize → tools/list / resources / prompts
+    S-->>CLI: 19 tools + 2 resources + 8 prompts（JSON Schema）
+    Note over CLI,L: 上下文① 系统提示词（纪律 + 输出契约 + 工作流）<br/>上下文② 由 MCP schema 转成的 function 定义
+    CLI->>L: system prompt + tools + 问题
+    L-->>CLI: tool_call api_support(asc_deintlv, 910b)
+    CLI->>S: tools/call（server 内部读索引 / 文档 / CSV）
+    S-->>CLI: 命中记录（path、行号、status）
+    Note over CLI,L: 上下文③ 工具返回的外部事实回灌（tool role）
+    CLI->>L: 结果回灌
+    L-->>CLI: 结论 + 依据 + 出处
+    CLI-->>U: 答案 + trace（轮数 / 工具 / 耗时 / token）

@@ -1,0 +1,15 @@
+%% 图 5  索引构建（上）与两遍召回（下）
+flowchart TB
+  subgraph BUILD["离线：python -m asc_agent index，实测约 2.9 s"]
+    direction LR
+    D["asc-devkit/<br/>3676 篇文档"] --> SP["按标题切块 → 27355 个片段<br/>抽 2889 张 API 卡片<br/>读 2468 行支持性 CSV"]
+    SP --> FTS[("SQLite FTS5<br/>中文二元切分<br/>doc_support 14343 行")]
+  end
+
+  subgraph QUERY["在线：一次检索"]
+    direction LR
+    R1["第一遍 宽召回<br/>and / or 组合"] --> R2["第二遍 意图重排<br/>文件名词元 · 章节命中<br/>芯片过滤 · 支持性"]
+    R2 --> OUT["带出处的片段<br/>+ 支持矩阵<br/>+ 冲突两路并报"]
+  end
+
+  BUILD --> QUERY

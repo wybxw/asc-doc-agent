@@ -1,0 +1,65 @@
+[36mMCP server: http://127.0.0.1:9051/mcp[0m
+[36mLLM: OpenAIChatClient  工具: 19 个[0m
+
+--- trace ---
+{
+  "question": "Exp 在 910b 上支持吗",
+  "rounds": 2,
+  "tools_used": [
+    "api_support",
+    "api_card"
+  ],
+  "tool_calls": 2,
+  "failed_calls": 0,
+  "elapsed_ms": 6956,
+  "usage": {
+    "prompt_tokens": 20771,
+    "completion_tokens": 1230,
+    "total_tokens": 22001
+  },
+  "stop_reason": "answered"
+}
+  [1] api_support({"api": "Exp", "chip": "ascend910b"}) ok=True 10ms 2330B
+  [1] api_card({"name": "Exp"}) ok=True 7ms 11672B
+**结论** —— 支持。`ascend910b`（Atlas A2 训练/推理系列）上 `Exp` 可用，但**必须按目录和原型分别看**：`basic_api/memory_vector_compute` 下的「不传入 config 的原型」支持；同一目录下「传入 config 的原型」不支持（config 是 Ascend 950 专属）；`reg_vector_compute` 形态在 910b 上不支持。
+
+**依据**
+
+1. 支持矩阵（`docs/zh/api/SIMD-API/basic_api/memory_vector_compute/basic_arithmetic/Exp.md`，来自 `api_card` / `api_support`）：
+
+| 目录 / 形态 | 原型 | 910b 是否支持 | 证据来源 |
+| --- | --- | --- | --- |
+| `basic_api/memory_vector_compute/basic_arithmetic/Exp.md` | 不传入 config 的原型 | ✅ 支持 | 文档 npu 标签 + CSV `status=yes` |
+| `basic_api/memory_vector_compute/basic_arithmetic/Exp.md` | 传入 config 的原型 | ❌ 不支持 | 文档 npu 标签（CSV 未单列该原型） |
+| `basic_api/reg_vector_compute/basic_arithmetic/Exp.md` | （Reg 矢量计算） | ❌ 不支持 | 文档 npu 标签 + CSV `status=no` |
+| `adv_api/math_compute/Exp_interface/Exp.md` | （adv 接口） | ✅ 支持 | 文档 npu 标签（CSV 无此目录记录） |
+
+2. 两路证据一致：`api_support` 返回的 `conflicts` 为空，CSV 的 `doc_tag_agree` 均为 `true`。CSV 只覆盖了 `basic_api` 两行（`reg_vector_compute` = no、`memory_vector_compute` = yes），`adv_api` 那条只有文档标签，没有 CSV 记录。
+
+3. 910b 上可用的原型（`docs/zh/api/SIMD-API/basic_api/memory_vector_compute/basic_arithmetic/Exp.md`）：
+
+```cpp
+// tensor 前 n 个数据连续计算
+template <typename T>
+__aicore__ inline void Exp(const LocalTensor<T>& dst, const LocalTensor<T>& src, const int32_t& count)
+
+// tensor 高维切分计算，mask 逐 bit 模式
+template <typename T, bool isSetMask = true>
+__aicore__ inline void Exp(const LocalTensor<T>& dst, const LocalTensor<T>& src,
+                          uint64_t mask[], const uint8_t repeatTime, const UnaryRepeatParams& repeatParams)
+
+// tensor 高维切分计算，mask 连续模式
+template <typename T, bool isSetMask = true>
+__aicore__ inline void Exp(const LocalTensor<T>& dst, const LocalTensor<T>& src,
+                          uint64_t mask, const uint8_t repeatTime, const UnaryRepeatParams& repeatParams)
+```
+
+4. 头文件：`basic_api/kernel_operator_vec_unary_intf.h`（同上文档「功能说明」）。
+
+5. 910b 上的相关约束（同文档「约束说明」）：`count` 或 `repeatTime` 为 0 时该接口被视为 NOP，不写目的操作数——这条 `npu="A3,910b"` 标签明确包含 Atlas A2 训练/推理产品。
+
+**下一步 / 注意事项**
+
+- 不要在 910b 上写 `template <typename T, const ExpConfig& config = DEFAULT_EXP_CONFIG>` 这种带 config 的调用形式，参数说明表里 `config` 带 `<!-- npu="950" -->` 标签，仅 Ascend 950PR/950DT 支持；默认值 `DEFAULT_EXP_CONFIG` 只在该原型下才有意义。
+- 若你的 kernel 用的是 Reg 矢量（`reg_vector_compute`）编程方式，910b 上需改用 `memory_vector_compute` 的 MemBase 接口。
+- 文档未在本次取证范围内明确说明 910b 上 `T` 支持的全部 dtype 列表，需要的话要再读该文档「数据类型」章节确认。

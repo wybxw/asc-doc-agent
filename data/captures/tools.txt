@@ -1,0 +1,38 @@
+- search_docs(query, top_k, kind, category, chip)
+    检索 CANN/AscendC 资料库（API 文档/指南/样例/技能），返回带出处的片段。
+- api_card(name, category)
+    取单个 API 的结构化卡片：函数原型、参数、头文件、芯片支持矩阵。
+- api_support(api, chip)
+    查询某 API 在各芯片上的支持情况（合并文档标签与支持性 CSV）。
+- chip_apis(chip, group, only_supported, limit)
+    反查某芯片支持哪些 API（基于仓库自带支持性 CSV）。
+- chip_facts(chip, dtype)
+    查芯片架构事实（__NPU_ARCH__/SocVersion/实现目录）与数据类型规格。
+- read_doc(path, section, max_chars)
+    按路径读资料原文，可只取指定章节，避免读爆上下文。
+- read_skill(skill, file)
+    读取 .agent/skills 下的技能说明或参考文档（agent 的行为规范来源）。
+- fetch_url(url, max_chars)
+    抓取在线网页/上游文档并清洗成纯文本。
+- check_markdown(path, max_issues)
+    按 asc-doc-checker 规范检查 Markdown（标点/标题/代码块/芯片标签/章节顺序/术语）。
+- find_symbol(name, scope, limit)
+    在 include/impl/examples 源码中定位符号定义（补 Markdown 索引的盲区）。
+- find_examples(keyword, limit)
+    按关键字查找可运行的样例工程目录。
+- gen_ut(api, api_type, chip, core, out_dir)
+    调用 asc-api-ut-gen 生成 gtest 测试骨架（只落盘，不编译）。
+- repo_stats()
+    查看索引规模与可用技能列表。
+- card_search(query, architecture, chip, programming_model, api, card_type, status, limit, include_deprecated)
+    检索个人知识卡片（官方文档里没有的经验、约束、坑、选型结论）。
+- card_get(card_id)
+    读一张知识卡片全文 + 关系图（出边/入边）。
+- card_save(id, title, type, summary, body, status, confidence, tags, architecture, soc, chip, programming_model, api, dtype, evidence_path, evidence_note, verified_chip, verified_cann, create_only)
+    新建或更新知识卡片（写入 knowledge/cards/<id>.md）。更新只改传入字段。
+- card_link(source, target, type, note, remove)
+    建立/删除卡片关系：refines/generalizes/depends_on/supersedes/contradicts/alternative/related。
+- card_delete(id, confirm)
+    删除知识卡片（需 confirm=true；结论被取代时应标 deprecated 而非删除）。
+- card_check()
+    知识库体检：悬空关系、自环、取代未标 deprecated、作用域笔误等。

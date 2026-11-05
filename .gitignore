@@ -27,3 +27,14 @@ data/_probe_*.py
 # 上游资料仓：作为只读数据源存在，不纳入本仓版本管理
 # （它自带 .git 与 git-lfs 规则，纳入会被当成 submodule/gitlink 处理）
 asc-devkit/
+
+# 文档插图渲染工具链（可重装）：mermaid-cli 与 puppeteer 配置
+tools/node_modules/
+tools/package.json
+tools/package-lock.json
+tools/pptr.json
+tools/*.jar
+tools/measure.py
+
+# Office 临时文件
+~$*.docx

@@ -1,0 +1,5 @@
+%% 图 3  运行时拓扑：一个进程、两个角色、一条回环连接
+flowchart TB
+  A1["Agent 角色<br/>asc_agent.agent<br/>编排 / 调工具 / 打印 trace"] ==>|"streamable-http<br/>127.0.0.1:随机端口，纯回环"| S1["MCP Server 角色<br/>uvicorn + MCPServer<br/>19 工具 / 2 资源 / 8 prompt"]
+  S1 --> R["data/asc_index.db（SQLite FTS5）<br/>asc-devkit/ 文档 · 源码 · CSV · skills"]
+  A1 -->|"HTTPS"| LLM["云端 LLM<br/>base_url / model / key 全走环境变量"]

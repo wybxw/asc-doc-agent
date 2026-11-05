@@ -1,0 +1,22 @@
+- exp-support-differs-by-impl-dir  [feature/verified]  同名 API 在不同实现目录下支持矩阵不同（以 Exp 为例）
+    Exp 在 regbase / membase / adv 三处各有一篇文档，910B 上 regbase 版不支持、membase 版支持，按 API 名查支持性会得出矛盾结论
+    作用域：api=Exp,Cast,Add  证据：1 条  关系：1 出 / 1 入
+- deinterleave-on-910b-via-gathermask  [technique/draft]  910B 上做 deinterleave 优先用 GatherMask 内置模式 1/2
+    DeInterleave 在 2201 不支持；用 GatherMask 的 src1Pattern=1(偶)/2(奇) 直接拆奇偶，比 Gather 偏移表更省
+    作用域：architecture=2201 programming_model=tensor_api,c_api api=GatherMask,DeInterleave,Interleave  证据：1 条  关系：1 出 / 0 入
+- csv-support-path-format  [constraint/verified]  支持性 CSV 的 Path 列有两种格式，JOIN 前必须归一
+    api_310b_support.csv 的 Path 是相对 docs/zh/api/SIMD-API/ 的短路径，api_910b_support.csv 是 docs/zh/... 全路径；直接 JOIN 会大面积对不上
+    作用域：通用  证据：1 条  关系：0 出 / 1 入
+
+共 3 张，目录 knowledge/cards
+体检：python -m asc_agent cards --check
+{
+  "total": 3,
+  "ok": true,
+  "issues": [],
+  "counts": {
+    "error": 0,
+    "warn": 0,
+    "info": 0
+  }
+}
