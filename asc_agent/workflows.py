@@ -182,6 +182,45 @@ WORKFLOWS: dict[str, Workflow] = {
             Param("path", "待检查的 Markdown 路径", required=True, generic="<文档路径>"),
         ),
     ),
+    "knowledge_card": Workflow(
+        key="knowledge_card",
+        title="知识卡片维护与解释",
+        when="用户要记录/修订/查询自己维护的算子领域知识（官方文档没写的经验、约束、坑、"
+        "绕开限制的做法、选型结论）",
+        steps="""\
+0. 先看 action：`search`/`explain` 是**查与解释**；`create`/`update` 是**记录**；
+   `link` 改关系；`delete` 删卡（谨慎）；`check` 做全库体检。
+1. **写之前必须先查重**：`card_search(query="{topic}")`。已有覆盖同一作用域的卡片就
+   用 `card_save` 更新它，不要新建重复卡——重复卡是知识库腐化的头号原因。
+2. 记录时用 `card_save(id="{id}", title=..., type=..., summary=..., body=...,
+   architecture=..., chip=..., programming_model=..., api=..., dtype=...,
+   evidence_path=..., verified_chip=...)`。`type` 取 technique（用某 API 实现基础
+   API 不直接支持的操作）／constraint（文档没写的约束）／feature（隐含行为）／
+   pitfall（坑与规避）／decision（选型结论）。
+3. 作用域要写准，它决定以后能不能被正确检索到：通用知识留空；架构特有填
+   `architecture`（2201／3510）；型号特有填 `chip`；编程模型特有填
+   `programming_model`（c_api/tensor_api/tpipe/simt/simd/scalar/aicpu/...）。
+4. 关系用 `card_link(source, target, type, note)`：`refines`（本卡是对方的特化）、
+   `generalizes`（更通用）、`depends_on`（前置条件）、`supersedes`（取代，记得把
+   旧卡标 deprecated）、`contradicts`（结论冲突，需人工裁决）、`alternative`
+   （同目标另一做法）、`related`（弱关联）。
+5. 解释时用 `card_get(id)` 拿正文与关系图：沿 `depends_on` 展开前提，沿
+   `refines`／`generalizes` 给出不同架构的对应版本，遇 `contradicts` 必须两边都摆
+   出来，不许自己挑一个。
+6. 收尾跑 `card_check()`，把悬空关系／未标 deprecated 的取代／缺验证记录修掉。""",
+        deliver="查/解释：结论 + 相关卡片（含 status/confidence/验证芯片）+ 与官方文档的"
+        "对照（哪里一致、哪里是文档没写的补充、哪里冲突）。"
+        "新增/更新：卡片 id + 作用域 + 正文要点 + 已建立的关系 + card_check 结果。"
+        "**必须标注来源是个人卡片而非官方文档。**",
+        params=(
+            Param("action", "create/update/search/explain/link/delete/check", required=True,
+                  generic="create|update|search|explain|link|delete|check"),
+            Param("topic", "知识主题或查询词，例如「DataCopy 非对齐尾部处理」", default="",
+                  generic="<主题>"),
+            Param("id", "卡片 id（新建/更新/读取时用），小写连字符", default="",
+                  generic="<卡片 id>"),
+        ),
+    ),
 }
 
 # 客户端/用户可能用别的叫法，统一收敛到 key（含历史 MCP prompt 名）
@@ -199,6 +238,10 @@ WORKFLOW_ALIASES: dict[str, str] = {
     "concept": "learn_concept",
     "review": "review_markdown",
     "lint": "review_markdown",
+    "card": "knowledge_card",
+    "kb": "knowledge_card",
+    "knowledge": "knowledge_card",
+    "knowledge_base": "knowledge_card",
 }
 
 

@@ -1,6 +1,6 @@
 # 演示记录（离线模式）
 
-下面 5 个问题由 `scripts/run_demo.py` 自动生成，**不需要任何 API key**。
+下面 6 个问题由 `scripts/run_demo.py` 自动生成，**不需要任何 API key**。
 
 说明：工具调用是真实的（真的走 MCP、真的查索引、真的读技能文件）；
 只有「选哪个工具、怎么措辞」由 `MockClient` 的模板完成。
@@ -275,6 +275,60 @@ description: AscendC API 单元测试技能。当用户需要为新 API 编写 U
         "01_simd_cpp_api/03_basic_api/01_memory_vector_compute/cast/data_utils.h",
         "01_simd_cpp_api/03_basic_api/01_memory_vector_compute/cast/README.md"
      
+```
+</details>
+
+</details>
+
+### 知识库里关于支持性 CSV 的结论是什么
+
+- 工作流: `knowledge_card` ｜ 轮数: 2 ｜ 工具: card_search
+
+<details><summary>回答</summary>
+
+> 离线演示模式：工具调用是真的，模型措辞由模板拼装；配置 API key 后可换成真实模型生成。
+
+**来自工具 `card_search`**
+
+匹配 2 张个人知识卡片（**不是官方文档**）：
+- `csv-support-path-format`［constraint/verified/high］支持性 CSV 的 Path 列有两种格式，JOIN 前必须归一 —— api_310b_support.csv 的 Path 是相对 docs/zh/api/SIMD-API/ 的短路径，api_910b_support.csv 是 docs/zh/... 全路径；直接 JOIN 会大面积对不上
+- `exp-support-differs-by-impl-dir`［feature/verified/high］同名 API 在不同实现目录下支持矩阵不同（以 Exp 为例） —— Exp 在 regbase / membase / adv 三处各有一篇文档，910B 上 regbase 版不支持、membase 版支持，按 API 名查支持性会得出矛盾结论
+
+<details><summary>原始返回（截断）</summary>
+
+```json
+{
+  "query": "支持性 CSV 路径",
+  "count": 2,
+  "hits": [
+    {
+      "id": "csv-support-path-format",
+      "title": "支持性 CSV 的 Path 列有两种格式，JOIN 前必须归一",
+      "type": "constraint",
+      "status": "verified",
+      "confidence": "high",
+      "summary": "api_310b_support.csv 的 Path 是相对 docs/zh/api/SIMD-API/ 的短路径，api_910b_support.csv 是 docs/zh/... 全路径；直接 JOIN 会大面积对不上",
+      "scope": {},
+      "tags": [],
+      "updated": "2026-11-05",
+      "score": 21.1
+    },
+    {
+      "id": "exp-support-differs-by-impl-dir",
+      "title": "同名 API 在不同实现目录下支持矩阵不同（以 Exp 为例）",
+      "type": "feature",
+      "status": "verified",
+      "confidence": "high",
+      "summary": "Exp 在 regbase / membase / adv 三处各有一篇文档，910B 上 regbase 版不支持、membase 版支持，按 API 名查支持性会得出矛盾结论",
+      "scope": {},
+      "tags": [],
+      "updated": "2026-11-05",
+      "score": 10.1
+    }
+  ],
+  "source": "personal_knowledge_card",
+  "hint": ""
+}
 ```
 </details>
 

@@ -197,6 +197,42 @@ explicitly or write an API-specific UT.
 
 ---
 
+### W8 `knowledge_card` — 知识卡片维护与解释
+
+**用户会这样问**：「把这条经验记下来：DataCopy 处理非对齐尾块会越界」「查一下我们
+关于对齐的结论」「这条约束在 950 上也成立吗」「这两条是不是矛盾了」
+
+**参数**：`action`（必填，`create`/`update`/`search`/`explain`/`link`/`delete`/`check`）、
+`topic`、`id`
+
+**这是唯一一个会写盘的 agent 工作流**，写的是 `knowledge/cards/*.md`（个人知识），
+不碰 `asc-devkit/`（只读上游）。
+
+**取证顺序**
+
+0. 先看 action：`search`/`explain` 查与解释；`create`/`update` 记录；`link` 改关系；
+   `delete` 删卡；`check` 全库体检。
+1. **写之前必须查重**：`card_search`。已有覆盖同一作用域的卡就更新它，不新建重复卡。
+2. `card_save` 落盘，`type` 取 `technique`/`constraint`/`feature`/`pitfall`/`decision`。
+3. 作用域写准：通用留空、架构特有填 `architecture`（2201/3510）、型号特有填 `chip`、
+   编程模型特有填 `programming_model`。
+4. `card_link` 建关系（七种，见 [knowledge/README.md](../knowledge/README.md)）。
+5. 解释时 `card_get` 拿正文与关系图，沿 `depends_on` 展开前提、沿
+   `refines`/`generalizes` 给不同架构版本、遇 `contradicts` 必须两边都摆出来。
+6. 收尾 `card_check`。
+
+**为什么要单独一条工作流**：这类知识不在官方文档里，`search_docs` 查不到；
+而且它是**可写**的，需要查重、需要维护关系、需要置信度与验证记录，和只读检索
+是两种操作。
+
+**交付物**：查/解释 → 结论 + 相关卡片（含 status/confidence/验证芯片）+ 与官方
+文档的对照；记录 → 卡片 id + 作用域 + 关系 + `card_check` 结果。
+**必须标注来源是个人卡片而非官方文档。**
+
+完整字段与关系设计见 [`knowledge/README.md`](../knowledge/README.md)。
+
+---
+
 ## 别名表
 
 | 别名 | 收敛到 |
@@ -208,13 +244,14 @@ explicitly or write an API-specific UT.
 | `code` / `find` | `locate_code` |
 | `concept` | `learn_concept` |
 | `review` / `lint` / `review_markdown` | `review_markdown` |
+| `card` / `kb` / `knowledge` / `knowledge_base` | `knowledge_card` |
 
 `chip_capability` 和 `gen_ut_for_api` 是统一前 MCP 侧用的名字，保留成别名是为了
 兼容已有调用方（包括以前写在客户端里的 prompt 名）。
 
 ## 工作流之外：模型自己怎么选
 
-不指定 `--workflow` 时，系统提示词里列出了 7 个工作流的触发条件，由模型判断。
+不指定 `--workflow` 时，系统提示词里列出了 8 个工作流的触发条件，由模型判断。
 实践中的典型路由：
 
 | 问句 | 实际路由 |

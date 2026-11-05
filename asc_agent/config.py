@@ -24,6 +24,12 @@ INDEX_DB = Path(os.environ.get("ASC_AGENT_INDEX", str(DATA_DIR / "asc_index.db")
 DOCS_SUBDIR = "docs/zh"
 SKILLS_SUBDIR = ".agent/skills"
 
+# 个人维护的知识卡片（不是索引产物，要进版本库，所以放在 data/ 之外）
+KNOWLEDGE_DIR = Path(
+    os.environ.get("ASC_AGENT_KNOWLEDGE", str(REPO_ROOT / "knowledge"))
+).resolve()
+CARDS_DIR = KNOWLEDGE_DIR / "cards"
+
 # MCP 服务器
 MCP_HOST = os.environ.get("ASC_AGENT_HOST", "127.0.0.1")
 MCP_PORT = int(os.environ.get("ASC_AGENT_PORT", "8931"))
@@ -44,6 +50,10 @@ def docs_root() -> Path:
 
 def skills_root() -> Path:
     return DEVKIT_ROOT / SKILLS_SUBDIR
+
+
+def cards_root() -> Path:
+    return CARDS_DIR
 
 
 def ensure_data_dir() -> Path:

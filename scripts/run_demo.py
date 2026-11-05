@@ -39,6 +39,7 @@ QUESTIONS = [
     ("Ascend 950 的架构号是多少", ""),
     ("UT 怎么生成", "gen_ut"),
     ("有没有 cast 的样例", "locate_code"),
+    ("知识库里关于支持性 CSV 的结论是什么", "knowledge_card"),
 ]
 
 

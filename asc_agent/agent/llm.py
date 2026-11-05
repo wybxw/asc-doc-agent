@@ -154,6 +154,10 @@ class MockClient:
     # 关键词 → 工具调用。顺序敏感：越具体的意图放越前面。
     SCRIPTS: list[tuple[tuple[str, ...], list[tuple[str, dict[str, Any]]]]] = [
         (
+            ("知识库", "知识卡片", "卡片", "记下来", "经验"),
+            [("card_search", {"query": "支持性 CSV 路径"})],
+        ),
+        (
             ("ut", "单元测试", "测试用例", "gtest"),
             [("read_skill", {"skill": "asc-api-ut-gen"})],
         ),
@@ -301,6 +305,18 @@ class MockClient:
                 ln for ln in data["body"].splitlines()[:14] if ln.strip()
             ]
             return [f"技能 `{data['skill']}`（{data['chars']} 字符）开头：", "```markdown", *head, "```"]
+
+        if name == "card_search":
+            hits = data.get("hits", [])
+            lines = [f"匹配 {data.get('count', 0)} 张个人知识卡片（**不是官方文档**）："]
+            for h in hits[:4]:
+                lines.append(
+                    f"- `{h['id']}`［{h['type']}/{h['status']}/{h['confidence']}］"
+                    f"{h['title']} —— {h.get('summary') or '（无 summary）'}"
+                )
+            if not hits:
+                lines.append(f"- {data.get('hint', '没有匹配')}")
+            return lines
 
         if name == "find_examples":
             lines = [f"找到 {data.get('count', 0)} 个样例工程："]

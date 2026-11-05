@@ -34,6 +34,14 @@ from asc_agent.mcp_server.tools import (
     repo_stats,
     search_docs,
 )
+from asc_agent.mcp_server.tools_kb import (
+    card_check,
+    card_delete,
+    card_get,
+    card_link,
+    card_save,
+    card_search,
+)
 
 INSTRUCTIONS = """\
 你是「CANN 算子/硬件资料助手」。你的知识边界以本地 asc-devkit 资料库为准：
@@ -109,6 +117,33 @@ def build_server() -> MCPServer:
     srv.add_tool(
         repo_stats, name="repo_stats",
         description="查看索引规模与可用技能列表。",
+    )
+
+    # ---- 知识卡片：个人维护的经验（可写） --------------------------------
+    srv.add_tool(
+        card_search, name="card_search",
+        description="检索个人知识卡片（官方文档里没有的经验、约束、坑、选型结论）。",
+    )
+    srv.add_tool(
+        card_get, name="card_get",
+        description="读一张知识卡片全文 + 关系图（出边/入边）。",
+    )
+    srv.add_tool(
+        card_save, name="card_save",
+        description="新建或更新知识卡片（写入 knowledge/cards/<id>.md）。更新只改传入字段。",
+    )
+    srv.add_tool(
+        card_link, name="card_link",
+        description="建立/删除卡片关系：refines/generalizes/depends_on/supersedes/"
+        "contradicts/alternative/related。",
+    )
+    srv.add_tool(
+        card_delete, name="card_delete",
+        description="删除知识卡片（需 confirm=true；结论被取代时应标 deprecated 而非删除）。",
+    )
+    srv.add_tool(
+        card_check, name="card_check",
+        description="知识库体检：悬空关系、自环、取代未标 deprecated、作用域笔误等。",
     )
 
     # ---- 资源：把技能文件暴露成可枚举的 URI --------------------------------

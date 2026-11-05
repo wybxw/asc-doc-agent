@@ -111,14 +111,20 @@ MCP 两层：agent 侧注入任务提示词，MCP 侧注册成标准 prompt（�
 | `locate_code` | 找实现/找样例 | `find_symbol` → `find_examples` → `search_docs(guide)` |
 | `learn_concept` | 概念/入门答疑 | `search_docs(guide)` → `search_docs(api_doc)` → `read_doc` |
 | `review_markdown` | 文档规范检查 | `check_markdown` → `read_skill(doc-checker)` → 逐条建议 |
+| `knowledge_card` | 个人知识卡片增删改查与解释 | `card_search` 查重 → `card_save` → `card_link` 建关系 → `card_check` |
 
-别名（`api`/`chip`/`ut`/`doc`/`code`/`concept`/`review` 等）与统一前的旧 MCP 名
+别名（`api`/`chip`/`ut`/`doc`/`code`/`concept`/`review`/`kb` 等）与统一前的旧 MCP 名
 （`chip_capability`、`gen_ut_for_api`）都能解析到上表。指定了无法识别的工作流会
 直接报错并列出可选值，不再静默降级成自动路由。
+
+> `knowledge_card` 是唯一会写盘的工作流：它写 `knowledge/cards/*.md`（**个人知识**），
+> 不碰 `asc-devkit/`（只读上游）。
 
 ## 5. 工具一览
 
 `python -m asc_agent tools` 可列（描述来自 MCP 交给模型的同一份 schema）。
+
+**官方资料（只读）**
 
 | 工具 | 作用 |
 | --- | --- |
@@ -136,15 +142,27 @@ MCP 两层：agent 侧注入任务提示词，MCP 侧注册成标准 prompt（�
 | `gen_ut` | 调 asc-api-ut-gen 生成 gtest 骨架 |
 | `repo_stats` | 索引规模与可用技能 |
 
+**个人知识卡片（可读写）**
+
+| 工具 | 作用 |
+| --- | --- |
+| `card_search` | 检索个人卡片，可按架构/型号/编程模型/API/类型/状态过滤 |
+| `card_get` | 读卡片全文 + 关系图（出边/入边） |
+| `card_save` | 新建/更新卡片；**只改传入字段**，省略即保留 |
+| `card_link` | 建立/删除关系（七种，见 [`knowledge/README.md`](knowledge/README.md)） |
+| `card_delete` | 删卡（需 `confirm=true`；被取代时应标 deprecated 而非删除） |
+| `card_check` | 体检：悬空关系、自环、取代未标 deprecated、未知编程模型、缺验证记录 |
+
 ## 6. 测试
 
 ```bash
-python -m pytest tests/ -q          # 103 passed
+python -m pytest tests/ -q          # 138 passed
 ```
 
 - `tests/test_retriever.py`（24）— 分词、排序回归、卡片兜底、支持矩阵粒度、芯片过滤
 - `tests/test_tools.py`（48）— 参数校验、错误兜底、lint 各条规则、并发线程安全、UT 生成
-- `tests/test_agent_e2e.py`（31）— **真起 MCP server、真走 HTTP**、编排循环控制流、两层工作流一致性
+- `tests/test_knowledge.py`（34）— 卡片存储、作用域过滤、关系推导、PATCH 语义、体检
+- `tests/test_agent_e2e.py`（32）— **真起 MCP server、真走 HTTP**、编排循环控制流、两层工作流一致性
 
 ## 7. 目录
 
@@ -163,21 +181,52 @@ asc_agent/
     web.py               网页抓取 + HTML 清洗
     code.py              符号定位、样例工程检索
     lint.py              asc-doc-checker 规范的执行版
-    tools.py             13 个工具实现（扁平参数 + Pydantic 校验）
+    tools.py             13 个官方资料工具（只读）
+    tools_kb.py          6 个知识卡片工具（可写）
     server.py            MCPServer 装配：tools / resources / prompts
+  knowledge/
+    models.py            ★ 卡片模型 + 六种关系定义（INVERSE 反向推导）
+    store.py             文件读写、作用域匹配、检索、体检
   agent/
     prompts.py           ★ 系统提示词（人工核心资产）
-  workflows.py           ★ 7 个工作流的唯一注册表（agent 与 MCP 共用）
     orchestrator.py      ★ 编排循环：轮数预算、轨迹、异常兜底
     llm.py               OpenAI 兼容客户端 + 离线 MockClient
     bridge.py            MCP client 桥 + 本地 server 托管
-  cli.py                 命令行入口
+  workflows.py           ★ 8 个工作流的唯一注册表（agent 与 MCP 共用）
+  cli.py                 命令行入口（ask/chat/tools/workflows/cards/serve/index）
+knowledge/
+  README.md              ★ 卡片字段、作用域、关系设计（怎么维护）
+  cards/*.md             卡片文件（人手工维护，进 git）
 docs/                    架构、工作流、vibe coding 记录、演示输出
 scripts/run_demo.py      一键生成离线演示
 tests/                   pytest
 ```
 
-## 8. 已知边界
+## 8. 知识卡片
+
+官方文档是**外部事实**，个人卡片是**自己的判断**——两者分开存放、分开标注：
+
+- 存储：`knowledge/cards/<id>.md`（YAML frontmatter + Markdown），**文件即真相**，
+  可以直接用编辑器改、能 diff、能进 git；
+- 作用域：`architecture` / `soc` / `chip` / `programming_model` / `api` / `dtype`
+  六个正交维度，留空即「不限」。这样「通用 / 架构特有 / 型号特有 / 编程模型特有」
+  可以自由叠加，而不是一个单值枚举；
+- 关系：`refines` / `generalizes` / `depends_on` / `supersedes` / `contradicts` /
+  `alternative` / `related`，**只写在声明方一次**，反向读取时推导；
+- `status`（draft/verified/deprecated）+ `confidence` + `verified_on`（芯片/CANN/日期）
+  用来判断卡片是否过期。
+
+维护方式二选一：直接改文件，或让 agent 改（`--workflow knowledge_card`）。
+改完跑体检：
+
+```bash
+python -m asc_agent cards            # 列出全部卡片
+python -m asc_agent cards --check    # 悬空关系 / 取代未标 deprecated / 缺验证记录
+```
+
+细节见 [`knowledge/README.md`](knowledge/README.md)。
+
+## 9. 已知边界
 
 - **支持性 CSV 只覆盖 `ascend910b` / `ascend310b` 两代**。问其它芯片时 `chip_apis`
   会明说覆盖范围，让用户改用 `api_support` 看文档标签——不假装有数据。

@@ -145,6 +145,36 @@ def cmd_workflows(args) -> int:
     return 0
 
 
+def cmd_cards(args) -> int:
+    """知识卡片运维：列表 / 体检。写卡片请用 agent（--workflow knowledge_card）。"""
+    from asc_agent.knowledge import store
+
+    if args.check:
+        result = store.check()
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0 if result["ok"] else 1
+
+    cards = store.list_cards()
+    if not cards:
+        print(f"知识库为空：{store.display_path(config.cards_root())}")
+        return 0
+    for c in cards:
+        scope = " ".join(
+            f"{k}={','.join(v)}" for k, v in c.scope.model_dump().items() if v
+        ) or "通用"
+        # 入边是推导出来的，计数要算上，否则看起来像「没人引用」
+        graph = store.graph(c)
+        print(f"- \033[1m{c.id}\033[0m  [{c.type.value}/{c.status.value}]  {c.title}")
+        print(f"    {c.summary or '(无 summary)'}")
+        print(
+            f"    作用域：{scope}  证据：{len(c.evidence)} 条  "
+            f"关系：{len(graph['outgoing'])} 出 / {len(graph['incoming'])} 入"
+        )
+    print(f"\n共 {len(cards)} 张，目录 {store.display_path(config.cards_root())}")
+    print("体检：python -m asc_agent cards --check")
+    return 0
+
+
 def cmd_serve(args) -> int:
     from asc_agent.mcp_server.server import build_server
 
@@ -187,6 +217,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     sp = sub.add_parser("workflows", help="列出内置工作流")
     sp.set_defaults(func=cmd_workflows)
+
+    sp = sub.add_parser("cards", help="列出知识卡片 / 体检")
+    sp.add_argument("--check", action="store_true", help="跑一致性体检（悬空关系、取代未标 deprecated 等）")
+    sp.set_defaults(func=cmd_cards)
 
     sp = sub.add_parser("serve", help="只起 MCP server")
     sp.add_argument("--host", default=config.MCP_HOST)

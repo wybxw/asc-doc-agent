@@ -113,6 +113,23 @@ def test_mcp_prompt_renders_same_text_as_registry():
     assert text == render_prompt("gen_ut", args)
 
 
+def test_knowledge_workflow_is_registered_both_layers():
+    """知识卡片工作流要同时出现在注册表和 MCP prompt 里。"""
+    assert "knowledge_card" in WORKFLOWS
+    assert resolve_workflow("kb") == "knowledge_card"
+
+    server = build_server()
+    listed = asyncio.run(server.list_prompts())
+    assert "knowledge_card" in {p.name for p in listed}
+
+    got = asyncio.run(
+        server.get_prompt("knowledge_card", {"action": "create", "topic": "对齐", "id": "x"})
+    )
+    text = got.messages[0].content.text
+    assert "card_save" in text and "card_search" in text
+    assert "查重" in text          # 写之前先查重这条纪律必须在
+
+
 def test_build_task_prompt_injects_steps():
     plain = build_task_prompt("Exp 怎么用")
     assert plain == "Exp 怎么用"
@@ -139,8 +156,11 @@ def test_bridge_exposes_all_tools(bridge: McpBridge):
         "search_docs", "api_card", "api_support", "chip_apis", "chip_facts",
         "read_doc", "read_skill", "fetch_url", "check_markdown",
         "find_symbol", "find_examples", "gen_ut", "repo_stats",
+        # 知识卡片（可写）
+        "card_search", "card_get", "card_save", "card_link", "card_delete", "card_check",
     }
     assert expected <= names
+    assert len(expected) == 19
 
 
 def test_bridge_tool_schema_is_flat(bridge: McpBridge):
