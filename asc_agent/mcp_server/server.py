@@ -135,86 +135,40 @@ def build_server() -> MCPServer:
 
         return json.dumps(facts.chip_facts(chip), ensure_ascii=False, indent=2)
 
-    # ---- 提示模板：把「常见工作」固化成可直接执行的工作流 ------------------
-    @srv.prompt(
-        name="lookup_api",
-        description="查一个 API 怎么用、支持哪些芯片",
-    )
-    def prompt_lookup_api(api: str, chip: str = "") -> str:
-        return f"""\
-请查清 API `{api}`{f' 在 `{chip}` 上的情况' if chip else ''}，按下面顺序取证：
+    # ---- 提示模板：从 asc_agent.workflows 单一事实源注册 ------------------
+    # 不在这里手写 prompt 正文——内容全部来自工作流注册表，这样「加一个工作流」
+    # 只改一个文件，agent 侧与 MCP 侧不会再漂移。
+    from asc_agent.workflows import prompt_specs
 
-1. `api_card(name="{api}")` —— 拿原型、参数表、头文件、支持矩阵。
-2. 若卡片缺失（found=false），`search_docs(query="{api} 函数原型")` 再补。
-3. {f'`api_support(api="{api}", chip="{chip}")` 核对支持性。' if chip else f'`api_support(api="{api}")` 列出各芯片支持情况。'}
-4. 需要确认头文件时 `find_symbol(name="{api}", scope="include")`。
+    try:
+        from mcp.server.mcpserver.prompts import Prompt
+        from mcp.server.mcpserver.prompts.base import PromptArgument
+    except ImportError:  # pragma: no cover - SDK 路径变化时不致命，只是少 7 个 prompt
+        Prompt = None  # type: ignore[assignment]
+        print(
+            "[asc-doc-agent] 警告：当前 mcp SDK 未提供 Prompt 类，"
+            "工作流 prompt 不会注册（工具与资源不受影响）",
+            file=sys.stderr,
+        )
 
-输出：一句话结论 → 函数原型（cpp 代码块）→ 参数说明表 → 支持芯片 →
-头文件路径 → 出处（每段都标 path）。
-"""
-
-    @srv.prompt(
-        name="chip_capability",
-        description="某芯片支持什么：架构号、API 范围、数据类型",
-    )
-    def prompt_chip_capability(chip: str) -> str:
-        return f"""\
-请汇总芯片 `{chip}` 的能力画像：
-
-1. `chip_facts(chip="{chip}")` —— 架构号、SocVersion、实现目录。
-2. `chip_apis(chip="{chip}", only_supported=true)` —— 支持性 CSV 覆盖范围内的 API 清单。
-3. 涉及低精度时 `chip_facts(chip="{chip}", dtype="fp8_e4m3fn_t")` 核对。
-4. 结论里明确区分「CSV 有记录」与「只有文档标签」两类证据。
-
-输出：架构速查表 → 支持能力概览 → 资料缺口（哪些结论没有 CSV 支撑）。
-"""
-
-    @srv.prompt(
-        name="write_api_doc",
-        description="为新 API 写一份符合规范的文档并自检",
-    )
-    def prompt_write_api_doc(api: str) -> str:
-        return f"""\
-为 API `{api}` 写一份符合 asc-doc-checker 规范的文档：
-
-1. `read_skill(skill="asc-doc-checker")` 读规范；需要细节再读
-   `read_skill(skill="asc-doc-checker", file="references/writing_specs.md")`。
-2. `api_card(name="{api}")` 取真实原型与参数（不要编造签名）。
-3. 按固定章节顺序写：产品支持情况 → 功能说明 → 函数原型 → 参数说明 →
-   数据类型（可选）→ 返回值说明 → 约束说明 → 调用示例。
-4. 芯片标签用 `<!-- npu="950" id1 -->` 形式，组内顺序 950→A3→910b→910→310p→310b→x90→9030。
-5. 写完把文件落到 docs/ 下，再 `check_markdown(path=...)` 自检并把问题逐条修掉。
-"""
-
-    @srv.prompt(
-        name="gen_ut_for_api",
-        description="为 API 生成 UT 骨架",
-    )
-    def prompt_gen_ut_for_api(api: str, chip: str = "ascend910b1", api_type: str = "membase") -> str:
-        return f"""\
-为 API `{api}` 生成 UT（芯片 `{chip}`，类型 `{api_type}`）：
-
-1. `chip_facts(chip="{chip}")` 确认芯片调用名合法。
-2. `gen_ut(api="{api}", api_type="{api_type}", chip="{chip}")`。
-3. 若返回 ok=false，把生成器的报错**原样**转述（它说明该 API 没有可泛化的签名），
-   然后 `find_symbol(name="{api}", scope="impl")` 与 `find_examples(keyword="{api.lower()}")`
-   给出「先读哪个 impl、抄哪个样例」的具体建议。
-4. ok=true 时说明产出路径、行数，并提示需要人工补齐的 tiling/数据初始化部分。
-"""
-
-    @srv.prompt(
-        name="review_markdown",
-        description="检查一篇文档是否符合规范",
-    )
-    def prompt_review_markdown(path: str) -> str:
-        return f"""\
-检查文档 `{path}` 是否符合 asc-doc-checker 规范：
-
-1. `check_markdown(path="{path}")` 跑机器可判定的 14 条规则。
-2. 对机器判不了的部分（表述是否准确、图是否符合意图），`read_skill` 读规范后人工判。
-3. 输出：结论（通过/不通过）→ 按规则分组的问题清单（带行号与原文片段）→ 逐条修改建议。
-4. 不要只说「有空格问题」，要给出「第 N 行 `xxx` 应改为 `yyy`」。
-"""
+    if Prompt is not None:
+        for spec in prompt_specs():
+            srv.add_prompt(
+                Prompt(
+                    name=spec["name"],
+                    title=spec["title"],
+                    description=spec["description"],
+                    arguments=[
+                        PromptArgument(
+                            name=a["name"],
+                            description=a["description"],
+                            required=a["required"],
+                        )
+                        for a in spec["arguments"]
+                    ],
+                    fn=spec["render"],
+                )
+            )
 
     return srv
 

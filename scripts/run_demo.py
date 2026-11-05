@@ -55,9 +55,10 @@ def main() -> int:
             answer, trace = agent.run(question, workflow=wf)
             summary = trace.summary()
             out.append(f"### {question}\n")
+            # 不写耗时：每次跑差几毫秒，会让 demo.md 反复产生无意义 diff
             out.append(
                 f"- 工作流: `{wf or '自动'}` ｜ 轮数: {summary['rounds']} ｜ "
-                f"工具: {', '.join(summary['tools_used'])} ｜ 耗时: {summary['elapsed_ms']}ms\n"
+                f"工具: {', '.join(summary['tools_used'])}\n"
             )
             out.append("<details><summary>回答</summary>\n")
             out.append(answer[:2600])

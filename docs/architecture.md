@@ -12,7 +12,7 @@ Agent 层（agent）   ——「按什么顺序用、怎么说话」
 
 - 资料变多/格式变 → 只动 `indexing`；
 - 新增一种能力（比如「查编译日志」）→ 只加一个 `tools.py` 函数 + `server.py` 一行注册；
-- 回答风格/取证顺序变 → 只改 `prompts.py`。
+- 回答风格变 → 只改 `prompts.py`；取证顺序变 → 只改 `workflows.py`。
 
 实际开发中这三层的改动次数是 6 : 1 : 1，说明切分是准的。
 
@@ -106,9 +106,15 @@ curl 打 `/mcp`。`--transport stdio` 保留以兼容标准客户端。
 
 - **resources**：`skill://{name}/{path}` 把 4 个技能文件变成可枚举 URI，
   `chip://facts/{chip}` 把芯片事实变成资源——客户端可以像读文件一样读它们；
-- **prompts**：5 个工作流模板（`lookup_api` / `chip_capability` /
-  `write_api_doc` / `gen_ut_for_api` / `review_markdown`），每个都带具体工具参数，
-  别的 MCP 客户端接入后能直接复用这套取证流程。
+- **prompts**：7 个工作流（`lookup_api` / `chip_support` / `write_api_doc` /
+  `gen_ut` / `locate_code` / `learn_concept` / `review_markdown`），每个都带具体
+  工具参数，别的 MCP 客户端接入后能直接复用这套取证流程。
+
+这些 prompt **不是**在 `server.py` 里手写的，而是从 `asc_agent/workflows.py` 的
+单一注册表用 `prompt_specs()` 批量注册——`server.py` 里没有任何 prompt 正文。
+好处是 agent 侧和 MCP 侧用同一份定义，改一处两边同时生效；`server.py` 也就不用
+每加一个工作流就跟进改一遍。这条约束由测试守着
+（`test_mcp_prompts_match_workflow_registry`）。
 
 ## 4. Agent 层
 

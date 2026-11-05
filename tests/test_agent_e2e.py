@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 
 import pytest
@@ -15,6 +16,8 @@ from asc_agent.agent.bridge import LocalServer, McpBridge, pick_port
 from asc_agent.agent.llm import AssistantTurn, MockClient, ToolCall
 from asc_agent.agent.orchestrator import Agent
 from asc_agent.agent.prompts import SYSTEM_PROMPT, build_task_prompt, list_workflows, resolve_workflow
+from asc_agent.mcp_server.server import build_server
+from asc_agent.workflows import WORKFLOWS, prompt_specs, render_prompt, render_steps
 
 pytestmark = pytest.mark.skipif(
     not config.INDEX_DB.exists(),
@@ -45,6 +48,69 @@ def test_workflows_are_resolvable():
     assert "lookup_api" in keys
     assert resolve_workflow("api") == "lookup_api"
     assert resolve_workflow("不支持的类型") == ""
+
+
+# ---------------------------------------------------------------- 两层统一
+
+
+@pytest.mark.parametrize(
+    "alias,expected",
+    [
+        ("api", "lookup_api"),
+        ("usage", "lookup_api"),
+        ("chip", "chip_support"),
+        ("chip_capability", "chip_support"),   # 旧 MCP prompt 名
+        ("gen_ut_for_api", "gen_ut"),          # 旧 MCP prompt 名
+        ("review_markdown", "review_markdown"),  # 现在是正式工作流
+        ("lint", "review_markdown"),
+        ("find", "locate_code"),
+    ],
+)
+def test_legacy_names_resolve(alias, expected):
+    """两层的旧名字都要能收敛到新 key，否则 --workflow 会静默失效。"""
+    assert resolve_workflow(alias) == expected
+
+
+def test_every_workflow_renders_without_args():
+    """agent 侧不传参数也要能渲染（用 generic 占位符）。"""
+    for key in WORKFLOWS:
+        text = render_steps(key)
+        assert text.strip()
+        assert "{" not in text, f"{key} 渲染后仍有未替换的占位符：{text}"
+
+
+def test_render_fills_supplied_values():
+    text = render_prompt("lookup_api", {"api": "Exp", "chip": "ascend910b"})
+    assert 'api_card(name="Exp"' in text
+    assert 'api_support(api="Exp", chip="ascend910b")' in text
+    # 没传的 category 应落到空值，而不是把占位说明当成参数
+    assert 'category=""' in text
+
+
+def test_prompt_specs_cover_all_workflows():
+    specs = prompt_specs()
+    assert [s["name"] for s in specs] == list(WORKFLOWS)
+    for s in specs:
+        assert s["title"] and s["description"]
+        assert callable(s["render"])
+
+
+def test_mcp_prompts_match_workflow_registry():
+    """核心断言：MCP 暴露的 prompt 集合必须等于工作流注册表，不能再各写一份。"""
+    server = build_server()
+    listed = asyncio.run(server.list_prompts())
+    assert {p.name for p in listed} == set(WORKFLOWS)
+    assert len(listed) == len(WORKFLOWS)
+
+
+def test_mcp_prompt_renders_same_text_as_registry():
+    server = build_server()
+    args = {"api": "Add", "chip": "ascend950pr_9599", "api_type": "regbase"}
+    got = asyncio.run(server.get_prompt("gen_ut", args))
+    text = got.messages[0].content.text
+    assert 'gen_ut(api="Add"' in text
+    assert 'api_type="regbase"' in text
+    assert text == render_prompt("gen_ut", args)
 
 
 def test_build_task_prompt_injects_steps():

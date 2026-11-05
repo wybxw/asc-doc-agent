@@ -25,7 +25,7 @@ $ python -m asc_agent ask "Exp 在 910b 上支持吗" --offline --trace
 | --- | --- |
 | **至少两个不同功能 skill/工具** | MCP 暴露 **13 个**工具，覆盖 5 类能力：①资料检索（中文 bigram 全文索引 + 意图重排）②结构化事实（API 卡片 / 芯片架构 / dtype 规格）③双源支持性比对（文档 `npu` 标签 × 仓库 CSV）④文档规范仪器化检查（asc-doc-checker 的规则变成 10 组可执行断言）⑤源码定位与工具链调用（头文件符号、样例工程、UT 生成器） |
 | **用标准协议打通大脑与本地环境** | 标准 **MCP**（Model Context Protocol，`mcp` SDK 2.3.0）：`asc_agent/mcp_server` 是 server（13 tools + 2 resource templates + 5 prompts，streamable-http 传输），`asc_agent/agent/bridge.py` 是 client。工具清单经 MCP 握手自动转成 LLM 的 function schema，**没有手写第二份工具定义** |
-| **AI 写样板代码，人专注 prompt 与编排** | 索引器、Pydantic 契约、MCP 装配、规则正则、CLI、测试全部由 AI 生成；人工只定 `asc_agent/agent/prompts.py`（工作流与纪律）和 `asc_agent/agent/orchestrator.py`（循环语义）。过程记录见 [`docs/vibe-coding.md`](docs/vibe-coding.md) |
+| **AI 写样板代码，人专注 prompt 与编排** | 索引器、Pydantic 契约、MCP 装配、规则正则、CLI、测试全部由 AI 生成；人工只定 `asc_agent/agent/prompts.py`（纪律）、`asc_agent/workflows.py`（工作流）和 `asc_agent/agent/orchestrator.py`（循环语义）。过程记录见 [`docs/vibe-coding.md`](docs/vibe-coding.md) |
 | **在已有 `.agent` 技能之上编排** | 4 个技能被**原样复用**而非重写：`asc-npu-arch` 的 `npu-arch-facts.json` 是唯一芯片事实源（`facts.py` 只读、零复制）；`asc-doc-checker` 的 308 行规范变成 `lint.py`；`asc-api-ut-gen` 的生成器被 `gen_ut` 直接调用；`asc-ar-dev` 的输出契约写进系统提示词 |
 
 ## 2. 快速开始
@@ -98,16 +98,23 @@ python -m asc_agent chat            # 多轮
 ## 4. 内置工作流
 
 `python -m asc_agent workflows` 可列。工作流不是 if/else 分支，而是**注入提示词的
-取证步骤**（`prompts.py: WORKFLOWS`），因此新增任务类型只需加一段文本。
+取证步骤**，全部定义在 **`asc_agent/workflows.py`** 这一处，同时驱动 agent 与
+MCP 两层：agent 侧注入任务提示词，MCP 侧注册成标准 prompt（任何 MCP 客户端可调）。
+新增工作流只改这一个文件。
 
 | 工作流 | 触发场景 | 取证顺序 |
 | --- | --- | --- |
-| `lookup_api` | 某 API 怎么用、参数、头文件 | `api_card` → `search_docs(example)` → `find_symbol(include)` |
+| `lookup_api` | 某 API 怎么用、参数、头文件 | `api_card` → `search_docs(example)` → `api_support` → `find_symbol(include)` |
 | `chip_support` | 某 API/特性在哪个芯片支持 | `api_support` → `chip_apis` → `chip_facts` |
 | `write_api_doc` | 新写/补写 API 文档 | `read_skill(doc-checker)` → `search_docs` 参照 → `api_card` → `check_markdown` |
-| `gen_ut` | 要 UT 骨架 | `read_skill(ut-gen)` → `gen_ut` → `read_doc` 复核 |
-| `locate_code` | 找实现/找样例 | `find_symbol` → `find_examples` → `read_doc` |
+| `gen_ut` | 要 UT 骨架 | `read_skill(ut-gen)` → `chip_facts` → `gen_ut` → `read_doc` 复核 |
+| `locate_code` | 找实现/找样例 | `find_symbol` → `find_examples` → `search_docs(guide)` |
 | `learn_concept` | 概念/入门答疑 | `search_docs(guide)` → `search_docs(api_doc)` → `read_doc` |
+| `review_markdown` | 文档规范检查 | `check_markdown` → `read_skill(doc-checker)` → 逐条建议 |
+
+别名（`api`/`chip`/`ut`/`doc`/`code`/`concept`/`review` 等）与统一前的旧 MCP 名
+（`chip_capability`、`gen_ut_for_api`）都能解析到上表。指定了无法识别的工作流会
+直接报错并列出可选值，不再静默降级成自动路由。
 
 ## 5. 工具一览
 
@@ -132,12 +139,12 @@ python -m asc_agent chat            # 多轮
 ## 6. 测试
 
 ```bash
-python -m pytest tests/ -q          # 90 passed
+python -m pytest tests/ -q          # 103 passed
 ```
 
 - `tests/test_retriever.py`（24）— 分词、排序回归、卡片兜底、支持矩阵粒度、芯片过滤
 - `tests/test_tools.py`（48）— 参数校验、错误兜底、lint 各条规则、并发线程安全、UT 生成
-- `tests/test_agent_e2e.py`（18）— **真起 MCP server、真走 HTTP**、编排循环控制流
+- `tests/test_agent_e2e.py`（31）— **真起 MCP server、真走 HTTP**、编排循环控制流、两层工作流一致性
 
 ## 7. 目录
 
@@ -159,7 +166,8 @@ asc_agent/
     tools.py             13 个工具实现（扁平参数 + Pydantic 校验）
     server.py            MCPServer 装配：tools / resources / prompts
   agent/
-    prompts.py           ★ 系统提示词 + 6 个工作流（人工核心资产）
+    prompts.py           ★ 系统提示词（人工核心资产）
+  workflows.py           ★ 7 个工作流的唯一注册表（agent 与 MCP 共用）
     orchestrator.py      ★ 编排循环：轮数预算、轨迹、异常兜底
     llm.py               OpenAI 兼容客户端 + 离线 MockClient
     bridge.py            MCP client 桥 + 本地 server 托管

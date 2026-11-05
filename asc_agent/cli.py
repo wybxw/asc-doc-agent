@@ -24,6 +24,30 @@ def _banner(msg: str) -> None:
     print(f"\033[36m{msg}\033[0m", file=sys.stderr)
 
 
+def _check_workflow(name: str) -> str:
+    """校验 --workflow，改写成规范 key。
+
+    以前无法识别的工作流会被静默降级成「自动路由」，用户以为指定了其实没有。
+    显式指定的东西不该被悄悄忽略，所以这里直接报错并列出可选值。
+    """
+    from asc_agent.workflows import WORKFLOWS, WORKFLOW_ALIASES, resolve_workflow
+
+    if not name:
+        return ""
+    key = resolve_workflow(name)
+    if key:
+        if key != name:
+            _banner(f"工作流 {name!r} → {key}")
+        return key
+    valid = ", ".join(WORKFLOWS)
+    aliases = ", ".join(sorted(WORKFLOW_ALIASES))
+    print(
+        f"未知工作流：{name!r}\n可选：{valid}\n别名：{aliases}",
+        file=sys.stderr,
+    )
+    raise SystemExit(2)
+
+
 def _make_agent(args):
     from asc_agent.agent.bridge import LocalServer, McpBridge
     from asc_agent.agent.llm import make_client
@@ -42,9 +66,10 @@ def _make_agent(args):
 
 
 def cmd_ask(args) -> int:
+    workflow = _check_workflow(args.workflow)
     agent, bridge, server = _make_agent(args)
     try:
-        answer, trace = agent.run(args.question, workflow=args.workflow)
+        answer, trace = agent.run(args.question, workflow=workflow)
         print(answer)
         if args.trace:
             print("\n--- trace ---", file=sys.stderr)
@@ -63,6 +88,7 @@ def cmd_ask(args) -> int:
 
 
 def cmd_chat(args) -> int:
+    workflow = _check_workflow(args.workflow)
     agent, bridge, server = _make_agent(args)
     history: list[dict] = []
     print("输入问题，空行或 Ctrl-C 退出。", file=sys.stderr)
@@ -74,7 +100,7 @@ def cmd_chat(args) -> int:
                 break
             if not question:
                 break
-            answer, trace = agent.run(question, workflow=args.workflow, history=history)
+            answer, trace = agent.run(question, workflow=workflow, history=history)
             print(answer)
             if args.trace:
                 print(json.dumps(trace.summary(), ensure_ascii=False), file=sys.stderr)

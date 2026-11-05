@@ -13,7 +13,8 @@
 | `mcp_server/server.py`（MCP 装配） | AI 生成 | `MCPServer` / `@tool` / `@resource` / `@prompt` 的标准用法 |
 | `agent/bridge.py`（MCP client） | AI 生成 | `list_tools → OpenAI tools` 的转换是模板工作 |
 | `agent/llm.py`（客户端） | AI 生成 | OpenAI 兼容接口调用 |
-| **`agent/prompts.py`（系统提示词 + 6 工作流）** | **人写** | 决定 agent 行为的上限，无法外包 |
+| **`agent/prompts.py`（系统提示词）** | **人写** | 决定 agent 行为的上限，无法外包 |
+| **`workflows.py`（7 个工作流的注册表）** | **人写** | 取证顺序是业务判断，且要同时服务 agent 与 MCP 两层 |
 | **`agent/orchestrator.py`（循环语义）** | **人写** | 轮数预算、结果回灌策略、失败收敛，是工程判断 |
 | `tests/*` | AI 生成 + 人补断言 | 结构由 AI 铺，具体期望值（该命中哪个文件）必须人看 |
 | `docs/*`、`README.md` | AI 生成初稿 + 人改事实 | —— |
