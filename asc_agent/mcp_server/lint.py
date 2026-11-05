@@ -48,6 +48,20 @@ def _strip_product_names(line: str) -> str:
         line = line.replace(name, "")
     return line
 
+
+INLINE_CODE = re.compile(r"`[^`]*`")
+LINK_TEXT = re.compile(r"\[[^\]]*\]\([^)]*\)")
+
+
+def _strip_inline_code(line: str) -> str:
+    """去掉行内代码，避免把 `Location::L0C` 这类枚举值当成术语误报。"""
+    return INLINE_CODE.sub("", line)
+
+
+def _strip_link_text(line: str) -> str:
+    """去掉链接文字，避免把 `[Int8 Channel Merge](...)` 这种特性名当成 dtype 误报。"""
+    return LINK_TEXT.sub("", line)
+
 # --- 规则 2：标题 ---------------------------------------------------------
 HEADING_BAD_SPACE = re.compile(r"^#{1,6}(?!#)\S")
 HEADING_TRAILING_PUNCT = re.compile(r"^#{1,6}\s+.*[。，、：；]$")
@@ -175,6 +189,14 @@ def check_markdown(path: str, max_issues: int = 40) -> dict:
         return {"path": path, "passed": 0, "total_rules": 0, "issues": [], "error": str(exc)}
     if not p.exists():
         return {"path": path, "passed": 0, "total_rules": 0, "issues": [], "error": "文件不存在"}
+    if p.is_dir():
+        return {
+            "path": path,
+            "passed": 0,
+            "total_rules": 0,
+            "issues": [],
+            "error": "这是一个目录，不能按文档检查；请指定具体 .md 文件",
+        }
 
     text = p.read_text(encoding="utf-8", errors="replace")
     lines = text.splitlines()
@@ -182,9 +204,17 @@ def check_markdown(path: str, max_issues: int = 40) -> dict:
     issues: list[dict] = []
     checked: list[str] = []
 
-    def add(rule: str, lineno: int, msg: str, snippet: str = "") -> None:
+    def add(rule: str, lineno: int, msg: str, snippet: str = "", severity: str = "warn") -> None:
         if len(issues) < max_issues:
-            issues.append({"rule": rule, "line": lineno, "message": msg, "snippet": snippet[:160]})
+            issues.append(
+                {
+                    "rule": rule,
+                    "line": lineno,
+                    "message": msg,
+                    "snippet": snippet[:160],
+                    "severity": severity,
+                }
+            )
 
     # 1 标点与空格
     checked.append("R1 标点/中英文空格")
@@ -258,15 +288,11 @@ def check_markdown(path: str, max_issues: int = 40) -> dict:
                 add("R4 图注位置", i, "图注应写在图片上方，格式 **图 n**  标题", nxt)
 
     # 8 芯片标签
-    checked.append("R8 芯片标签")
-    ids: list[str] = []
-    # 8 芯片标签
-    # 注意：只检查**产品支持情况章节内、顶层**的标签。真实文档里标签可以嵌套
-    # （Exp.md 的产品支持块里又套了子标签），如果全局按出现顺序要求 id 严格递增，
-    # 官方文档也会被报一堆错——那是噪声，不是规范问题。
+    # 只检查**产品支持情况章节内、顶层**的标签：真实文档里标签可以嵌套
+    # （产品支持块里又套了子标签），全局按出现顺序要求 id 严格递增会把官方文档
+    # 也报一堆错——那是噪声，不是规范问题。
     checked.append("R8 芯片标签")
     section = _support_section(lines)
-    ids: list[str] = []
     top_group: list[str] = []
     for lineno, line in section:
         depth = len(line) - len(line.lstrip())
@@ -276,20 +302,9 @@ def check_markdown(path: str, max_issues: int = 40) -> dict:
         tags = [t.strip().lower() for t in re.split(r"[,，/]", m.group(1)) if t.strip()]
         for t in tags:
             if t not in TAG_ORDER:
-                add("R8 标签值", lineno, f"芯片标签取值非法：{t}", line)
+                add("R8 标签值", lineno, f"芯片标签取值非法：{t}", line, severity="error")
         if depth == 0:
             top_group.extend(tags)
-        if m.group(2):
-            tid = m.group(2)
-            if tid in ids:
-                add("R8 标签 id", lineno, f"标签 id 重复：{tid}", line)
-            if depth == 0:
-                ids.append(tid)
-                if tid != f"id{len(ids)}":
-                    add(
-                        "R8 标签 id", lineno,
-                        f"顶层标签 id 应从 id1 递增，期望 id{len(ids)}，实际 {tid}", line,
-                    )
     if top_group:
         idx = [TAG_ORDER.index(t) for t in top_group if t in TAG_ORDER]
         if idx != sorted(idx):
@@ -297,6 +312,22 @@ def check_markdown(path: str, max_issues: int = 40) -> dict:
                 "R8 标签顺序", 0,
                 f"标签组内顺序应为 {'→'.join(TAG_ORDER)}", ",".join(top_group),
             )
+
+    # 8b 标签 id：规范要求「从 id1 开始、不重复、递增」，是对**整篇文档**的约束。
+    # 逐个 mismatch 报会把一篇文档刷出十几条同样的问题，所以这里汇总成最多三条。
+    all_ids = [(text.count("\n", 0, m.start()) + 1, m.group(2))
+               for m in NPU_TAG.finditer(text) if m.group(2)]
+    if all_ids:
+        nums = [int(t[2:]) for _, t in all_ids if t[2:].isdigit()]
+        dup = sorted({t for _, t in all_ids if [x for _, x in all_ids].count(t) > 1})
+        if dup:
+            add("R8 标签 id", 0, f"标签 id 重复：{', '.join(dup)}", "", severity="error")
+        if nums and nums[0] != 1:
+            add("R8 标签 id", all_ids[0][0],
+                f"首个标签 id 应为 id1，实际 {all_ids[0][1]}", "")
+        if nums != sorted(nums) or len(set(nums)) != len(nums):
+            if nums and any(b <= a for a, b in zip(nums, nums[1:])):
+                add("R8 标签 id", 0, "标签 id 未按文档顺序递增", ",".join(all_ids[0][1:3]) + "…")
 
     # 标签块内「- 产品名：支持/不支持」的产品名要与标签一致（仅产品支持章节）
     block_re = re.compile(
@@ -332,7 +363,10 @@ def check_markdown(path: str, max_issues: int = 40) -> dict:
             add("R8 合并产品名", i, "禁止使用 Atlas A2/A3 合并写法", line)
 
     # 10 API 文档章节顺序
-    if "/api/" in path.replace("\\", "/"):
+    # 只对**看起来是 API 文档**的文件检查：`/api/` 下还有大量概述页、列表页、
+    # usage 页，它们本来就没有「产品支持情况」「调用示例」，一刀切会刷满误报。
+    looks_like_api_doc = "## 函数原型" in text or "## 参数说明" in text
+    if "/api/" in path.replace("\\", "/") and looks_like_api_doc:
         checked.append("R10 章节顺序")
         found = []
         for i, line in enumerate(lines, 1):
@@ -347,29 +381,34 @@ def check_markdown(path: str, max_issues: int = 40) -> dict:
         order = [f[0] for f in found]
         if order != sorted(order):
             add("R10 章节顺序", found[0][2] if found else 0,
-                "章节顺序应为：" + "→".join(API_SECTION_ORDER), "")
+                "章节顺序应为：" + "→".join(API_SECTION_ORDER), "", severity="error")
         names = [f[1] for f in found]
         if "产品支持情况" not in names:
-            add("R10 缺章节", 0, "API 文档缺少「## 产品支持情况」", "")
+            add("R10 缺章节", 0, "API 文档缺少「## 产品支持情况」", "", severity="error")
         if "调用示例" not in names:
-            add("R10 缺章节", 0, "API 文档缺少「## 调用示例」", "")
+            add("R10 缺章节", 0, "API 文档缺少「## 调用示例」", "", severity="error")
 
-    # 11 术语
+    # 11 术语（跳过行内代码：`Location::L0C` 是枚举值，不是缓冲区名）
     checked.append("R11 术语")
     for i, line in enumerate(lines, 1):
         if in_fence[i - 1]:
             continue
+        probe = _strip_inline_code(line)
         for pat, fix in TERM_FIXES:
-            if pat.search(line):
+            if pat.search(probe):
                 add("R11 术语", i, f"应写作「{fix}」", line)
 
-    # 9 dtype 写法
+    # 9 dtype 写法（跳过行内代码与链接文字：`[Int8 Channel Merge](...)` 是特性名）
     checked.append("R9 dtype 写法")
     for i, line in enumerate(lines, 1):
         if in_fence[i - 1]:
             continue
-        for m in DTYPE_BAD.finditer(line):
-            add("R9 dtype", i, f"dtype 应写规范名（{m.group(0)} → 如 int8_t/half/bfloat16_t/float）", line)
+        probe = _strip_link_text(_strip_inline_code(line))
+        for m in DTYPE_BAD.finditer(probe):
+            add(
+                "R9 dtype", i,
+                f"dtype 应写规范名（{m.group(0)} → 如 int8_t/half/bfloat16_t/float）", line,
+            )
 
     # 13 头文件路径写法
     checked.append("R13 头文件写法")
@@ -388,14 +427,19 @@ def check_markdown(path: str, max_issues: int = 40) -> dict:
                 continue
             for old, new in deprecated.items():
                 if re.search(rf"\b{re.escape(old)}\b", line):
-                    add("R14 废弃接口", i, f"{old} 已废弃，应改用 {new}", line)
+                    add("R14 废弃接口", i, f"{old} 已废弃，应改用 {new}", line, severity="error")
 
     passed = len(checked) - len({i["rule"].split()[0] for i in issues})
+    counts = {
+        lvl: sum(1 for i in issues if i.get("severity") == lvl)
+        for lvl in ("error", "warn")
+    }
     return {
         "path": path,
         "passed": max(passed, 0),
         "total_rules": len(checked),
         "issues": issues,
+        "counts": counts,
         "checked_rules": checked,
         "error": "",
     }

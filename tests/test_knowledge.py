@@ -323,3 +323,80 @@ def test_manual_edit_is_picked_up(temp_cards):
     path.write_text(text, encoding="utf-8")
     store._cache.clear()
     assert store.get_card("hand-edit").summary == "手改的"
+
+
+def test_save_repairs_unparsable_file(temp_cards):
+    """坏文件（frontmatter 写坏）也必须能被 card_save 修复，不能崩。
+
+    回归：原有实现里 `get_card(id).created` 在解析失败时是 None.created，
+    直接 AttributeError——而这恰恰是「用工具修坏卡片」最常见的场景。
+    """
+    broken = temp_cards / "broken-card.md"
+    broken.write_text("没有 frontmatter 的乱写内容\n", encoding="utf-8")
+    store._cache.clear()
+    out = make("broken-card", summary="修好了")
+    assert "error" not in out, out
+    assert out["created"] is False          # 文件本来就在
+    assert store.get_card("broken-card").summary == "修好了"
+
+
+def test_evidence_note_only_keeps_path(temp_cards):
+    """只补 note 不该把已有证据路径清空（会静默丢证据）。"""
+    make("ev", evidence_path="docs/zh/api/x.md", evidence_note="原说明")
+    kb.card_save(id="ev", evidence_note="新说明")
+    card = store.get_card("ev")
+    assert card.evidence[0].path == "docs/zh/api/x.md"
+    assert card.evidence[0].note == "新说明"
+
+
+def test_verifying_sets_date_automatically(temp_cards):
+    make("vdate")
+    kb.card_save(id="vdate", verified_chip="ascend910b4")
+    card = store.get_card("vdate")
+    assert card.verified_on is not None
+    assert card.verified_on.date          # 自动补日期，否则体检报「verified 无记录」
+
+
+def test_unlink_without_type_removes_all_relations(temp_cards):
+    """删除关系时 type 可留空，一次清掉两卡之间的所有关系。"""
+    make("m1")
+    make("m2")
+    kb.card_link("m1", "m2", "related")
+    kb.card_link("m1", "m2", "alternative")
+    out = kb.card_link("m1", "m2", "", remove=True)
+    assert out["removed"] == 2
+    assert store.get_card("m1").relations == []
+
+
+def test_link_without_type_errors_with_options(temp_cards):
+    make("n1")
+    make("n2")
+    out = kb.card_link("n1", "n2", "")
+    assert "error" in out
+    assert "refines" in out["error"]
+
+
+def test_filename_is_the_address(temp_cards):
+    """frontmatter id 与文件名不一致时，以文件名为准，且体检要报出来。
+
+    否则 `card_save(id="file")` 会写到 frontmatter 里那个 id 对应的**另一个文件**，
+    `card_delete` 也删不到，留下两份互不同步的卡。
+    """
+    (temp_cards / "real-name.md").write_text(
+        "---\nid: other-name\ntitle: 测试\ntype: technique\n---\n\n正文\n",
+        encoding="utf-8",
+    )
+    store._cache.clear()
+
+    # 读取时以文件名为准
+    assert [c.id for c in store.list_cards()] == ["real-name"]
+
+    # 体检要先报出不一致
+    codes = {i["code"] for i in kb.card_check()["issues"]}
+    assert "id-filename-mismatch" in codes
+
+    # 保存写回同一个文件（顺带把 frontmatter id 修正成文件名），不会生成 other-name.md
+    kb.card_save(id="real-name", summary="改一下")
+    assert sorted(p.name for p in temp_cards.glob("*.md")) == ["real-name.md"]
+    after = {i["code"] for i in kb.card_check()["issues"]}
+    assert "id-filename-mismatch" not in after, "save 应把 id 修正成文件名"

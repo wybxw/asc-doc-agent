@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Annotated
 
 from pydantic import Field, ValidationError
@@ -223,14 +224,30 @@ def card_save(
         ):
             if value is not None:
                 setattr(card.scope, field, _split(value))
+        # 证据是列表，但工具只暴露一条「路径 + 说明」。更新时**只补不覆盖**：
+        # 只传 note 不该把已有路径清掉（否则一次补充说明就丢一条证据）。
         if evidence_path is not None or evidence_note is not None:
-            card.evidence = [Evidence(kind="doc", path=evidence_path or "", note=evidence_note or "")]
+            if evidence_path:
+                card.evidence = [
+                    Evidence(kind="doc", path=evidence_path, note=evidence_note or "")
+                ]
+            elif card.evidence:
+                card.evidence[0] = Evidence(
+                    kind=card.evidence[0].kind,
+                    path=card.evidence[0].path,
+                    note=evidence_note or "",
+                )
+            elif evidence_note:
+                card.evidence = [Evidence(kind="doc", path="", note=evidence_note)]
         if verified_chip is not None or verified_cann is not None:
             prev = card.verified_on or VerifiedOn()
+            chip_val = verified_chip if verified_chip is not None else prev.chip
+            cann_val = verified_cann if verified_cann is not None else prev.cann
+            # 一旦写入了验证主体，就顺手记下日期——否则「verified 但没日期」过不了体检
             card.verified_on = VerifiedOn(
-                chip=verified_chip if verified_chip is not None else prev.chip,
-                cann=verified_cann if verified_cann is not None else prev.cann,
-                date=prev.date,
+                chip=chip_val,
+                cann=cann_val,
+                date=prev.date or (date.today().isoformat() if (chip_val or cann_val) else ""),
             )
         card = Card(**card.model_dump())  # 重新校验一次，保证 id/枚举合法
     except (store.CardError, ValidationError, ValueError) as exc:
@@ -295,9 +312,10 @@ def card_link(
     type: Annotated[
         str,
         Field(
-            description="generalizes/refines/depends_on/supersedes/contradicts/alternative/related"
+            description="generalizes/refines/depends_on/supersedes/contradicts/alternative/related；"
+            "remove=true 时可留空表示删除两者之间的所有关系"
         ),
-    ],
+    ] = "",
     note: Annotated[str, Field(description="为什么建立这条关系")] = "",
     remove: Annotated[bool, Field(description="true 表示删除这条关系")] = False,
 ) -> dict:
@@ -312,6 +330,11 @@ def card_link(
     - `alternative`：同一目标的**另一种做法**
     - `related`：弱关联
     """
+    if not remove and not type:
+        return _err(
+            "建立关系必须指定 type，可选："
+            + ", ".join(t.value for t in store.RelationType)
+        )
     try:
         if remove:
             return store.unlink(source.strip(), target.strip(), type)

@@ -101,10 +101,17 @@ def list_cards(reload: bool = False) -> list[Card]:
             card = parse_card_text(p.read_text(encoding="utf-8"), fallback_id=p.stem)
         except (CardError, OSError):
             continue  # 坏文件不阻塞整体，check() 会单独报
+        # 文件名是**寻址依据**：frontmatter 里 id 写成别的值时，以文件名为准，
+        # 否则 save 会写到另一个文件、delete 也删不到（check() 会把不一致报出来）。
+        card = _align_id(card, p.stem)
         _cache[key] = (mtime, card)
         cards.append(card)
     cards.sort(key=lambda c: (c.updated or "", c.id), reverse=True)
     return cards
+
+
+def _align_id(card: Card, stem: str) -> Card:
+    return card if card.id == stem else card.model_copy(update={"id": stem})
 
 
 def get_card(card_id: str) -> Card | None:
@@ -115,6 +122,7 @@ def get_card(card_id: str) -> Card | None:
         card = parse_card_text(p.read_text(encoding="utf-8"), fallback_id=card_id)
     except (CardError, OSError):
         return None
+    card = _align_id(card, card_id)
     _cache[str(p)] = (p.stat().st_mtime, card)
     return card
 
@@ -141,13 +149,20 @@ def display_path(path: Path) -> str:
 
 
 def save_card(card: Card, create_only: bool = False) -> dict:
-    """写入卡片。create_only=True 时若已存在则报错（防误覆盖）。"""
+    """写入卡片。create_only=True 时若已存在则报错（防误覆盖）。
+
+    注意 `created` 的继承：文件存在但**解析失败**时 `get_card()` 会返回 None
+    （例如用户手工编辑写坏了 frontmatter），这里必须容错，否则「用工具修复坏卡片」
+    这个最常见的场景反而会崩在 AttributeError 上。
+    """
     path = _path(card.id)
     existed = path.exists()
     if create_only and existed:
         raise CardError(f"卡片 {card.id!r} 已存在；改内容请用 save（不带 create_only）")
     today = date.today().isoformat()
-    card.created = card.created or (get_card(card.id).created if existed else today) or today
+    if not card.created:
+        prev = get_card(card.id) if existed else None
+        card.created = (prev.created if prev is not None else "") or card.updated or today
     card.updated = today
     _atomic_write(path, render_card_text(card))
     _cache.pop(str(path), None)
@@ -327,13 +342,20 @@ def check() -> dict:
     ids = {c.id for c in cards}
     issues: list[dict] = []
 
-    # 目录里有但解析不了的文件
+    # 目录里有但解析不了的文件；顺带查文件名与 frontmatter id 是否一致
     for p in sorted(_root().glob("*.md")):
         try:
-            parse_card_text(p.read_text(encoding="utf-8"), fallback_id=p.stem)
+            raw = parse_card_text(p.read_text(encoding="utf-8"), fallback_id=p.stem)
         except (CardError, OSError) as exc:
             issues.append(
                 {"card": p.stem, "level": "error", "code": "unparsable", "message": str(exc)}
+            )
+            continue
+        if raw.id != p.stem:
+            issues.append(
+                {"card": p.stem, "level": "error", "code": "id-filename-mismatch",
+                 "message": f"frontmatter id 是 {raw.id!r}，但文件名是 {p.stem!r}；"
+                            "寻址以文件名为准，请把两处改成一致"}
             )
 
     for card in cards:

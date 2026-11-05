@@ -154,8 +154,11 @@ agent 侧的纪律（写在系统提示词里）：
 直接用编辑器改文件就行，工具只是另一条路径。改完跑一次体检：
 
 ```bash
-python -m asc_agent card-check      # 或者在对话里说「检查一下知识库」
+python -m asc_agent cards            # 列出全部卡片
+python -m asc_agent cards --check    # 体检（悬空关系 / 取代未标 deprecated / 缺验证记录）
 ```
+
+在对话里直接说「检查一下知识库」也可以（走 `card_check`）。
 
 提交前建议 `git diff knowledge/` 过一眼——知识卡片的价值就在于每个结论都能追溯到
 是谁、什么时候、在什么硬件上验证的。

@@ -106,7 +106,7 @@ curl 打 `/mcp`。`--transport stdio` 保留以兼容标准客户端。
 
 - **resources**：`skill://{name}/{path}` 把 4 个技能文件变成可枚举 URI，
   `chip://facts/{chip}` 把芯片事实变成资源——客户端可以像读文件一样读它们；
-- **prompts**：7 个工作流（`lookup_api` / `chip_support` / `write_api_doc` /
+- **prompts**：8 个工作流（`lookup_api` / `chip_support` / `write_api_doc` /
   `gen_ut` / `locate_code` / `learn_concept` / `review_markdown`），每个都带具体
   工具参数，别的 MCP 客户端接入后能直接复用这套取证流程。
 

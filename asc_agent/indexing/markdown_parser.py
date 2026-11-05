@@ -15,11 +15,6 @@ NPU_TAG = re.compile(r'<!--\s*npu="([^"]+)"\s*(id\d+)?\s*-->')
 
 HEADING = re.compile(r"^(#{1,6})\s+(.+?)\s*$", re.M)
 
-FENCE = re.compile(r"^```([A-Za-z0-9_+-]*)\s*$", re.M)
-
-# 支持矩阵里常见写法：`- Ascend 950PR/Ascend 950DT：支持`
-SUPPORT_LINE = re.compile(r"^-\s*(.+?)[：:]\s*(支持|不支持)", re.M)
-
 HEADER_PATH = re.compile(
     r"头文件路径为[：:]\s*`?([^`\n。]+?)`?[。\n]", re.M
 )
@@ -39,14 +34,8 @@ CHIP_ALIASES = {
     "9030": "ascend9030",
 }
 
-# 用户口语 → 规范芯片名（给 agent 的 chip 参数兜底）
-CHIP_LOOKUP = {
-    "950": "ascend950", "950pr": "ascend950", "950dt": "ascend950",
-    "a3": "atlas_a3", "atlasa3": "atlas_a3", "a2": "ascend910b",
-    "910b": "ascend910b", "910": "ascend910", "910a": "ascend910",
-    "310p": "ascend310p", "310b": "ascend310b", "x90": "ascend_x90",
-    "9030": "ascend9030", "610": "ascend310p",
-}
+# 用户口语 → 规范芯片名的归一不在这里做：统一由 `mcp_server.facts.normalize_chip`
+# 提供（事实源是技能的 npu-arch-facts.json）。本模块只负责解析文档里的原始标签值。
 
 
 @dataclass

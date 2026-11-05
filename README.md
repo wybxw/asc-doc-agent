@@ -24,7 +24,7 @@ $ python -m asc_agent ask "Exp 在 910b 上支持吗" --offline --trace
 | 要求 | 本项目的实现 |
 | --- | --- |
 | **至少两个不同功能 skill/工具** | MCP 暴露 **13 个**工具，覆盖 5 类能力：①资料检索（中文 bigram 全文索引 + 意图重排）②结构化事实（API 卡片 / 芯片架构 / dtype 规格）③双源支持性比对（文档 `npu` 标签 × 仓库 CSV）④文档规范仪器化检查（asc-doc-checker 的规则变成 10 组可执行断言）⑤源码定位与工具链调用（头文件符号、样例工程、UT 生成器） |
-| **用标准协议打通大脑与本地环境** | 标准 **MCP**（Model Context Protocol，`mcp` SDK 2.3.0）：`asc_agent/mcp_server` 是 server（13 tools + 2 resource templates + 5 prompts，streamable-http 传输），`asc_agent/agent/bridge.py` 是 client。工具清单经 MCP 握手自动转成 LLM 的 function schema，**没有手写第二份工具定义** |
+| **用标准协议打通大脑与本地环境** | 标准 **MCP**（Model Context Protocol，`mcp` SDK 2.3.0）：`asc_agent/mcp_server` 是 server（19 tools + 2 resource templates + 8 prompts，streamable-http 传输），`asc_agent/agent/bridge.py` 是 client。工具清单经 MCP 握手自动转成 LLM 的 function schema，**没有手写第二份工具定义** |
 | **AI 写样板代码，人专注 prompt 与编排** | 索引器、Pydantic 契约、MCP 装配、规则正则、CLI、测试全部由 AI 生成；人工只定 `asc_agent/agent/prompts.py`（纪律）、`asc_agent/workflows.py`（工作流）和 `asc_agent/agent/orchestrator.py`（循环语义）。过程记录见 [`docs/vibe-coding.md`](docs/vibe-coding.md) |
 | **在已有 `.agent` 技能之上编排** | 4 个技能被**原样复用**而非重写：`asc-npu-arch` 的 `npu-arch-facts.json` 是唯一芯片事实源（`facts.py` 只读、零复制）；`asc-doc-checker` 的 308 行规范变成 `lint.py`；`asc-api-ut-gen` 的生成器被 `gen_ut` 直接调用；`asc-ar-dev` 的输出契约写进系统提示词 |
 
@@ -69,7 +69,7 @@ python -m asc_agent chat            # 多轮
                                 ▼
    ┌────────────────────────────────────────────────────────────┐
    │ asc_agent/mcp_server/server.py（MCPServer）                 │
-   │  13 tools · skill://{name}/{path} · chip://facts/{chip}     │
+   │  19 tools · skill://{name}/{path} · chip://facts/{chip}     │
    │  5 prompts（lookup_api / chip_capability / write_api_doc …）│
    └───────┬──────────────────────┬─────────────────────────────┘
            │                      │
@@ -156,7 +156,7 @@ MCP 两层：agent 侧注入任务提示词，MCP 侧注册成标准 prompt（�
 ## 6. 测试
 
 ```bash
-python -m pytest tests/ -q          # 138 passed
+python -m pytest tests/ -q          # 150 passed
 ```
 
 - `tests/test_retriever.py`（24）— 分词、排序回归、卡片兜底、支持矩阵粒度、芯片过滤

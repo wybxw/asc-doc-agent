@@ -108,9 +108,31 @@ def test_api_support_chip_filter():
 
 
 def test_api_support_chip_field_not_clobbered():
-    """回归：by_doc 聚合曾经复用变量名 `chip`，把入参覆盖成最后一个芯片。"""
+    """回归：by_doc 聚合曾经复用变量名 `chip`，把入参覆盖成最后一个芯片。
+
+    现在 `chip` 字段返回**归一后**的规范标签（910b → ascend910b），
+    与文档标签口径一致，避免调用方还要自己映射。
+    """
     assert tools.api_support("Exp")["chip"] == "all"
-    assert tools.api_support("Exp", chip="910b")["chip"] == "910b"
+    out = tools.api_support("Exp", chip="910b")
+    assert out["chip"] == "ascend910b"
+    assert out["chip_filter_applied"] is True
+
+
+def test_api_support_unknown_chip_warns_instead_of_silently_ignoring():
+    """未知芯片不能静默忽略：既要警告，也不能谎称已过滤。"""
+    out = tools.api_support("Exp", chip="zzz")
+    assert out["chip"] == "all"
+    assert out["chip_filter_applied"] is False
+    assert "warning" in out and "zzz" in out["warning"]
+
+
+def test_search_docs_unknown_chip_warns_and_does_not_filter():
+    out = tools.search_docs("Exp", kind="api_doc", chip="zzz", top_k=3)
+    assert out["chip_filter"] == "none"
+    assert "warning" in out
+    # 不能因为芯片名写错就把 API 文档全过滤掉
+    assert out["count"] > 0
 
 
 def test_api_support_by_doc_breaks_down_per_document():
@@ -213,6 +235,41 @@ def test_read_skill_unknown_lists_available():
     out = tools.read_skill(skill="no-such-skill")
     assert out["found"] is False
     assert "asc-npu-arch" in out["available_skills"]
+
+
+def test_read_skill_directory_returns_hint_not_permission_error():
+    """传成目录要给出可操作的提示，而不是把 PermissionError 原文丢出去。"""
+    out = tools.read_skill(skill="asc-npu-arch", file="references")
+    assert out["found"] is False
+    assert "目录" in out["error"]
+    assert out.get("entries"), "应列出目录里的文件"
+    assert "PermissionError" not in out["error"]
+
+
+def test_check_markdown_directory_returns_hint():
+    out = tools.check_markdown(path="docs/zh/api")
+    assert out["error"] and "目录" in out["error"]
+
+
+def test_read_doc_directory_returns_hint():
+    out = tools.read_doc(path="docs/zh/api")
+    assert out["found"] is False and "目录" in out["error"]
+
+
+def test_gen_ut_sanitizes_api_name_in_output_path(tmp_path):
+    """api 名里的路径分隔符不能把输出文件带出 out_dir。"""
+    out_dir = tmp_path / "ut_out"
+    out = tools.gen_ut(api="../../evil", api_type="aiv", chip="ascend910b1",
+                       out_dir=str(out_dir))
+    # 不论生成成功与否，都不能写到 out_dir 之外
+    assert not (config.REPO_ROOT / "evil_aiv.cpp").exists()
+    assert not (config.REPO_ROOT / "data" / "evil_aiv.cpp").exists()
+    # 文件名里的非法字符必须被替换掉
+    if out.get("ok"):
+        assert out["output"].replace("\\", "/").startswith(str(out_dir).replace("\\", "/"))
+        assert ".." not in out["output"]
+    else:
+        assert out.get("error") or out.get("log")
 
 
 def test_read_skill_reference_file():

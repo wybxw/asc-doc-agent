@@ -189,8 +189,11 @@ class McpBridge:
         return body
 
     def read_resource(self, uri: str) -> str:
-        fut = asyncio.run_coroutine_threadsafe(self._read(uri), self._loop)
-        return fut.result(timeout=60)
+        try:
+            fut = asyncio.run_coroutine_threadsafe(self._read(uri), self._loop)
+            return fut.result(timeout=60)
+        except Exception as exc:  # noqa: BLE001
+            return f"读取资源失败（{uri}）：{type(exc).__name__}: {exc}"
 
     async def _read(self, uri: str) -> str:
         res = await self._session.read_resource(uri)

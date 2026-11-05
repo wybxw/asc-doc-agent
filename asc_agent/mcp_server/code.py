@@ -64,7 +64,11 @@ def find_symbol(name: str, scope: str = "all", limit: int = 10) -> dict:
     pattern = _definition_re(name)
     bare = re.compile(rf"\b{re.escape(name)}\b")
     hits: list[dict] = []
+    # 每个根目录各留一份配额：早期实现用一个全局上限，include 一扫满就直接
+    # break，`scope="all"` 实际上永远看不到 impl 和 examples 的命中。
+    per_root_cap = max(limit, 8)
     for tag, root in roots:
+        root_hits = 0
         for path in _iter_files(root, CODE_EXT):
             try:
                 if path.stat().st_size > MAX_FILE_BYTES:
@@ -87,17 +91,20 @@ def find_symbol(name: str, scope: str = "all", limit: int = 10) -> dict:
                         "definition": is_def,
                     }
                 )
-                if len(hits) >= limit * 6:
+                root_hits += 1
+                if root_hits >= per_root_cap:
                     break
-            if len(hits) >= limit * 6:
+            if root_hits >= per_root_cap:
                 break
     hits.sort(key=lambda h: (not h["definition"], h["scope"] != "include", h["path"]))
+    scopes_hit = sorted({h["scope"] for h in hits})
     return {
         "name": name,
         "scope": scope,
         "found": bool(hits),
         "count": len(hits),
         "hits": hits[:limit],
+        "scopes_hit": scopes_hit,
         "note": "" if hits else "未找到，可换用 find_examples 或 search_docs。",
     }
 

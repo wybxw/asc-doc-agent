@@ -174,8 +174,12 @@ class Scope(BaseModel):
     def matches(self, other: "Scope") -> bool:
         """本卡是否覆盖 `other` 这个查询范围。
 
-        规则：未限定的维度视为「全匹配」；双方都限定时要求有交集。
-        卡片比查询更具体时**不算匹配**——查「通用做法」不该返回某型号专有的卡。
+        规则：**查询没限定的维度不做约束**（等价于「全匹配」）；查询限定而卡片不限
+        的维度视为覆盖；双方都限定时要求有交集。
+
+        注意「查询未限定架构」时，架构专有的卡也会命中——这是刻意的：用户没说要
+        哪个架构，就不该把可能相关的卡藏起来。要只看通用卡，调用方应显式传
+        `is_universal` 过滤（见 `card_search` 的说明），而不是指望这里猜。
         """
         for name in ("architecture", "soc", "chip", "programming_model", "api", "dtype"):
             mine = set(_norm(getattr(self, name)))

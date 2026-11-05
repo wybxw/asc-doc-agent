@@ -56,18 +56,6 @@ TAG_TO_CHIP: dict[str, str] = {
     "9030": "",
 }
 
-# 派生产品族：只用文档标签粒度做支持性判断时使用
-TAG_LABEL: dict[str, str] = {
-    "ascend950": "Ascend 950PR/Ascend 950DT",
-    "atlas_a3": "Atlas A3 训练系列产品/Atlas A3 推理系列产品",
-    "ascend910b": "Atlas A2 训练系列产品/Atlas A2 推理系列产品",
-    "ascend910": "Atlas 训练系列产品",
-    "ascend310p": "Atlas 推理系列产品",
-    "ascend310b": "Atlas 200I/500 A2 推理产品",
-    "ascend_x90": "Kirin X90",
-    "ascend9030": "Kirin 9030",
-}
-
 # 芯片标签在文档里的规定相对顺序（asc-doc-checker 第 8 条）
 TAG_ORDER = ["950", "a3", "910b", "910", "310p", "310b", "x90", "9030"]
 
@@ -98,7 +86,11 @@ def normalize_chip(raw: str | None) -> str:
 
 
 def normalize_tag(raw: str | None) -> str:
-    """把芯片名收敛到文档 npu 标签的 8 个取値之一（ascend950/atlas_a3/...）。"""
+    """把芯片名收敛到文档 npu 标签的 8 个取值之一（ascend950/atlas_a3/...）。
+
+    先查精确表，再按**前缀**匹配：这样 `310b2`、`310b4`、`910b2c` 这类逐代 SKU
+    不必逐个登记，也能落到正确的标签上（否则会被当成未知芯片而丢掉过滤）。
+    """
     if not raw:
         return ""
     key = raw.strip().lower().replace(" ", "").replace("-", "_")
@@ -116,7 +108,24 @@ def normalize_tag(raw: str | None) -> str:
         "x90": "ascend_x90", "ascend_x90": "ascend_x90", "kirinx90": "ascend_x90",
         "9030": "ascend9030", "ascend9030": "ascend9030", "kirin9030": "ascend9030",
     }
-    return direct.get(key, "")
+    if key in direct:
+        return direct[key]
+    # 前缀兜底：长前缀优先，避免 "910" 抢走 "910b"
+    for prefix, tag in TAG_PREFIXES:
+        if key.startswith(prefix):
+            return tag
+    return ""
+
+
+# 前缀 → 文档标签（按长度降序匹配）
+TAG_PREFIXES: list[tuple[str, str]] = [
+    ("ascend950", "ascend950"), ("atlasa3", "atlas_a3"), ("ascend910b", "ascend910b"),
+    ("ascend910", "ascend910"), ("ascend310p", "ascend310p"), ("ascend310b", "ascend310b"),
+    ("ascend_x90", "ascend_x90"), ("ascend9030", "ascend9030"), ("kirin", "ascend_x90"),
+    ("910_93", "atlas_a3"), ("910b", "ascend910b"), ("910", "ascend910"),
+    ("310p", "ascend310p"), ("310b", "ascend310b"), ("950", "ascend950"),
+    ("9030", "ascend9030"), ("x90", "ascend_x90"),
+]
 
 
 @lru_cache(maxsize=1)
@@ -176,15 +185,32 @@ def dtype_facts(dtype: str | None = None) -> dict:
             "source": facts.get("dtype_source", ""),
         }
     item = dtypes.get(dtype)
+    shorthand_note = ""
     if item is None:
         short = facts.get("dtype_shorthands", {}).get(dtype)
         if short:
-            item = dtypes.get(short.get("type", ""))
-            dtype = short.get("type", dtype)
+            # 简写可能指向一个**逻辑类型**（如 S4 → int4b_t），而事实表里登记的是
+            # 实际存储类型（int4x2_t）。先按 type 找，找不到再退到 storage_type，
+            # 否则会给出「found=false 但又返回了 dtype 名」这种自相矛盾的结果。
+            logical = short.get("type", "")
+            storage = short.get("storage_type", "")
+            if logical in dtypes:
+                item = dtypes[logical]
+                dtype = logical
+            elif storage and storage in dtypes:
+                item = dtypes[storage]
+                shorthand_note = (
+                    f"{dtype} 的逻辑类型是 {logical or '未知'}，"
+                    f"事实表登记的是存储类型 {storage}，规格按存储类型给出。"
+                )
+                dtype = storage
     if item is None:
         return {"dtype": dtype, "found": False, "known": list(dtypes)}
     support = [
         {"family": fam, "products": v.get("products", []), "supported": dtype in v.get("dtypes", [])}
         for fam, v in product.items()
     ]
-    return {"dtype": dtype, "found": True, "spec": item, "product_support": support}
+    result = {"dtype": dtype, "found": True, "spec": item, "product_support": support}
+    if shorthand_note:
+        result["note"] = shorthand_note
+    return result

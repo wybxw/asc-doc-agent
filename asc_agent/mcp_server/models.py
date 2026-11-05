@@ -229,6 +229,7 @@ class CheckIssue(BaseModel):
     line: int = 0
     message: str
     snippet: str = ""
+    severity: str = Field(default="warn", description="error 表示硬性违规，warn 表示风格问题")
 
 
 class CheckReport(BaseModel):

@@ -19,6 +19,9 @@ import sys
 from asc_agent import config
 from asc_agent.logging_setup import quiet_logs as _quiet
 
+# 多轮对话保留的历史轮数（1 轮 = user + assistant 两条消息）
+MAX_HISTORY_TURNS = 6
+
 
 def _banner(msg: str) -> None:
     print(f"\033[36m{msg}\033[0m", file=sys.stderr)
@@ -56,10 +59,24 @@ def _make_agent(args):
     server = None
     url = args.server_url
     if not url:
-        server = LocalServer(port=args.port).start()
+        try:
+            server = LocalServer(port=args.port).start()
+        except Exception as exc:  # noqa: BLE001
+            print(f"启动本地 MCP server 失败：{type(exc).__name__}: {exc}", file=sys.stderr)
+            print("可用 --port 换个端口，或先 `serve` 起来再用 --server-url 指过去。", file=sys.stderr)
+            raise SystemExit(1)
         url = server.url
         _banner(f"MCP server: {url}")
-    bridge = McpBridge(url).__enter__()
+    try:
+        bridge = McpBridge(url).__enter__()
+    except Exception as exc:  # noqa: BLE001
+        if server:
+            server.stop()
+        print(
+            f"连接 MCP server 失败（{url}）：{type(exc).__name__}: {exc}",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
     client = make_client(offline=args.offline)
     _banner(f"LLM: {getattr(client, 'name', type(client).__name__)}  工具: {len(bridge.tools)} 个")
     return Agent(bridge, client), bridge, server
@@ -106,6 +123,10 @@ def cmd_chat(args) -> int:
                 print(json.dumps(trace.summary(), ensure_ascii=False), file=sys.stderr)
             history.append({"role": "user", "content": question})
             history.append({"role": "assistant", "content": answer})
+            # 只保留最近 6 轮：多轮对话不裁剪的话，上下文会无限增长，
+            # 既烧 token 又容易把早期无关内容带进当前问题。
+            if len(history) > MAX_HISTORY_TURNS * 2:
+                history[:] = history[-MAX_HISTORY_TURNS * 2:]
     finally:
         bridge.__exit__(None, None, None)
         if server:

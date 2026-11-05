@@ -36,6 +36,7 @@ python scripts/run_demo.py     # 重新生成本页
 {
   "api": "Exp",
   "chip": "all",
+  "chip_filter_applied": false,
   "found": true,
   "by_chip": {
     "ascend310b": [
@@ -72,7 +73,7 @@ python scripts/run_demo.py     # 重新生成本页
         "supported": false
       },
       {
-        "path": "docs/zh/api/SIMD-API/adv
+        "
 ```
 </details>
 

@@ -83,13 +83,36 @@ class Agent:
         answer = ""
         for round_no in range(1, self.max_rounds + 1):
             trace.rounds = round_no
-            turn = self.client.chat(messages, tools=self.tools)
+            try:
+                turn = self.client.chat(messages, tools=self.tools)
+            except Exception as exc:  # noqa: BLE001
+                # 网络/鉴权/限流失败不该把整条对话炸成 traceback：保留已取到的证据，
+                # 让调用方拿到一句能读懂的失败原因。
+                trace.stop_reason = "llm_error"
+                trace.elapsed_ms = int((time.time() - started) * 1000)
+                detail = f"{type(exc).__name__}: {exc}"
+                tip = "请检查 ASC_AGENT_API_KEY / ASC_AGENT_BASE_URL / ASC_AGENT_MODEL，或稍后重试。"
+                if trace.steps:
+                    return (
+                        f"调用模型失败（{detail}）。已取到 {len(trace.steps)} 条工具结果"
+                        f"（可用 --trace 查看），但没能生成最终回答。{tip}",
+                        trace,
+                    )
+                return f"调用模型失败（{detail}）。{tip}", trace
             if turn.usage:
                 for k, v in turn.usage.items():
                     trace.usage[k] = trace.usage.get(k, 0) + v
 
             if not turn.wants_tools:
                 answer = turn.content.strip()
+                if not answer:
+                    # 模型偶尔返回空内容（内容过滤、或只给了 finish_reason）。
+                    # 不要静默交出空白，至少说明发生了什么。
+                    answer = (
+                        "（模型没有返回内容"
+                        f"；finish_reason={turn.finish_reason or 'unknown'}。"
+                        "可以换个问法，或加 --trace 看工具调用情况。）"
+                    )
                 trace.stop_reason = "answered"
                 break
 
@@ -149,8 +172,23 @@ class Agent:
                     "并在开头用一句话说明还有哪些信息没查到。",
                 }
             )
-            turn = self.client.chat(messages, tools=None)
+            try:
+                turn = self.client.chat(messages, tools=None)
+            except Exception as exc:  # noqa: BLE001
+                trace.stop_reason = "llm_error"
+                trace.elapsed_ms = int((time.time() - started) * 1000)
+                return (
+                    f"工具预算已用完，且收尾时调用模型失败"
+                    f"（{type(exc).__name__}: {exc}）。已取到 {len(trace.steps)} 条工具结果，"
+                    "可用 --trace 查看。",
+                    trace,
+                )
             answer = turn.content.strip()
+            if not answer:
+                answer = (
+                    f"工具调用预算已用完，模型没有给出收尾回答。"
+                    f"已取到 {len(trace.steps)} 条工具结果（可用 --trace 查看）。"
+                )
 
         trace.elapsed_ms = int((time.time() - started) * 1000)
         return answer, trace

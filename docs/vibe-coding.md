@@ -9,12 +9,12 @@
 | --- | --- | --- |
 | `indexing/*`（分词、解析、建库、检索打分） | AI 生成 + 人调参 | 样板逻辑清晰，但排序权重要靠实测反复调 |
 | `mcp_server/models.py`（Pydantic 契约） | AI 生成 | 纯机械：字段名 + 描述 + 约束 |
-| `mcp_server/tools.py`（13 个工具） | AI 生成骨架 + 人补业务判断 | 函数体是「查库 → 组装 → 返回」，但冲突判定、prototype 粒度、兜底策略是人定的 |
+| `mcp_server/tools.py`（13 个只读工具） | AI 生成骨架 + 人补业务判断 | 函数体是「查库 → 组装 → 返回」，但冲突判定、prototype 粒度、兜底策略是人定的 |
 | `mcp_server/server.py`（MCP 装配） | AI 生成 | `MCPServer` / `@tool` / `@resource` / `@prompt` 的标准用法 |
 | `agent/bridge.py`（MCP client） | AI 生成 | `list_tools → OpenAI tools` 的转换是模板工作 |
 | `agent/llm.py`（客户端） | AI 生成 | OpenAI 兼容接口调用 |
 | **`agent/prompts.py`（系统提示词）** | **人写** | 决定 agent 行为的上限，无法外包 |
-| **`workflows.py`（7 个工作流的注册表）** | **人写** | 取证顺序是业务判断，且要同时服务 agent 与 MCP 两层 |
+| **`workflows.py`（8 个工作流的注册表）** | **人写** | 取证顺序是业务判断，且要同时服务 agent 与 MCP 两层 |
 | **`agent/orchestrator.py`（循环语义）** | **人写** | 轮数预算、结果回灌策略、失败收敛，是工程判断 |
 | `tests/*` | AI 生成 + 人补断言 | 结构由 AI 铺，具体期望值（该命中哪个文件）必须人看 |
 | `docs/*`、`README.md` | AI 生成初稿 + 人改事实 | —— |
@@ -121,10 +121,10 @@ AI 写的第一版是「轮数用完直接返回空字符串」。人改成：�
 | 1 | 勘察 asc-devkit 结构、读 4 个 SKILL.md、确认 mcp SDK 版本 | 确定「用 `.agent` 技能做事实源」的路线 |
 | 2 | 让 AI 生成 tokenizer / markdown_parser / indexer | 建库 3 秒、3676 篇 / 27355 块 |
 | 3 | 人调排序（两趟召回 + 名次归一 + 文件名加权） | `怎么做精度转换` 从无关结果修正到 `precision_conversion.md` |
-| 4 | 让 AI 生成 13 个工具的骨架 | 工具层跑通 |
+| 4 | 让 AI 生成 13 个只读工具的骨架 | 工具层跑通 |
 | 5 | 人补冲突判定、prototype 粒度、兜底策略 | `api_support` 不再误报冲突 |
 | 6 | 让 AI 生成 MCP 装配 + client 桥 | 端到端 HTTP 往返跑通 |
-| 7 | 人写提示词与编排循环 | 6 个工作流、轮数预算、轨迹 |
+| 7 | 人写提示词与编排循环 | 工作流、轮数预算、轨迹 |
 | 8 | 让 AI 生成测试，人补期望值 | 81 个测试全绿 |
 | 9 | 修线程安全 / 日志噪音 / 连接重置三个工程坑 | CLI 输出干净 |
 

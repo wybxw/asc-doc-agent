@@ -59,6 +59,12 @@ def read_doc(rel_path: str, section: str | None = None, max_chars: int = DEFAULT
         return {"path": rel_path, "found": False, "error": str(exc)}
     if not path.exists():
         return {"path": rel_path, "found": False, "error": "文件不存在"}
+    if path.is_dir():
+        return {
+            "path": rel_path,
+            "found": False,
+            "error": "这是一个目录，不能按文档读取；请指定具体文件（如 xxx.md）",
+        }
     if path.suffix.lower() not in {".md", ".txt", ".h", ".hpp", ".cpp", ".asc", ".py", ".csv"}:
         return {"path": rel_path, "found": False, "error": f"不支持的文件类型：{path.suffix}"}
     text = path.read_text(encoding="utf-8", errors="replace")
@@ -101,8 +107,9 @@ def read_skill(skill: str, file: str = "SKILL.md") -> dict:
     if not root.exists():
         return {"skill": skill, "found": False, "error": "找不到技能目录"}
     skill = (skill or "").strip().strip("/")
+    file = (file or "").strip().replace("\\", "/").lstrip("/") or "SKILL.md"
     # 允许「带 namespace 的技能名」和嵌套目录，但不能逃出 skills 根
-    target = (root / skill / file.replace("\\", "/").lstrip("/")).resolve()
+    target = (root / skill / file).resolve()
     if root.resolve() not in target.parents:
         return {"skill": skill, "found": False, "error": "路径越界"}
     if not target.exists():
@@ -115,6 +122,15 @@ def read_skill(skill: str, file: str = "SKILL.md") -> dict:
             "found": False,
             "error": "技能文件不存在",
             "available_skills": available,
+        }
+    if target.is_dir():
+        # 传成目录时给出目录清单，而不是让 open() 抛 PermissionError
+        return {
+            "skill": skill,
+            "file": file,
+            "found": False,
+            "error": "这是一个目录，请指定具体文件（如 SKILL.md 或 references/xxx.md）",
+            "entries": sorted(p.name for p in target.iterdir())[:40],
         }
     text = target.read_text(encoding="utf-8", errors="replace")
     return {

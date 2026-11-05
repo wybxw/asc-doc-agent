@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 from functools import lru_cache
@@ -102,23 +103,35 @@ def search_docs(
     )
     if err:
         return err
-    # 芯片名先归一成文档标签口径（`910b` → `ascend910b`），否则 chips 列存的是
-    # 标签名，直接拿用户口语去 LIKE 会一条都匹配不上。
-    chip_tag = facts.normalize_tag(args["chip"]) if args["chip"] else None
+    # 芯片名先归一成文档标签口径（`910b` → `ascend910b`）。归一失败时**不加过滤**
+    # 并给出 warning：早期版本会把用户原话直接塞进 SQL，结果是「查不到一个 API 文档」
+    # ——静默返回错误结果集，比报错更难排查。
+    chip_tag, chip_warning = "", ""
+    if args["chip"]:
+        chip_tag = facts.normalize_tag(args["chip"])
+        if not chip_tag:
+            chip_warning = (
+                f"未识别的芯片 {args['chip']!r}，已忽略芯片过滤。"
+                f"可用取值：{', '.join(facts.TAG_ORDER)}（或调用 chip_facts 查规范名）"
+            )
     hits = get_retriever().search(
         args["query"],
         top_k=args["top_k"],
         kind=None if args["kind"] == "any" else args["kind"],
         category=args["category"],
-        chip=chip_tag or args["chip"] or None,
+        chip=chip_tag or None,
     )
     out = [h.to_dict() for h in hits]
-    return {
+    result = {
         "query": query,
         "count": len(out),
         "hits": out,
         "hint": "" if out else "无命中：换用更短的关键词，或改用 find_symbol / find_examples。",
+        "chip_filter": chip_tag or "none",
     }
+    if chip_warning:
+        result["warning"] = chip_warning
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -148,6 +161,13 @@ def api_card(
             "hint": "apis 表与检索都没有命中。确认名称拼写，或用 search_docs 找相关主题。",
         }
     card["found"] = True
+    # 指定了 category 但没命中时，retriever 会退回全部候选。这里如实告知，
+    # 否则用户以为拿到的是某个实现的卡片。
+    if args["category"] and args["category"].lower() not in (card.get("category") or "").lower():
+        card["warning"] = (
+            f"没有 category 含 {args['category']!r} 的同名文档，已返回支持矩阵最完整的一份"
+            f"（{card.get('category')}）。可选目录见 alternatives。"
+        )
     # 支持矩阵按芯片聚合一下，模型读起来更省 token
     grouped: dict[str, list[dict]] = {}
     for row in card.get("support", []):
@@ -176,7 +196,16 @@ def api_support(
     if err:
         return err
     r = get_retriever()
-    tag = facts.normalize_tag(chip) if chip else ""
+    # 归一失败必须显式告知：早期版本会静默忽略过滤却把 chip 原样回显，
+    # 用户看到 `chip: zzz` 会以为结果只针对 zzz，实际是全量。
+    tag, chip_warning = "", ""
+    if chip:
+        tag = facts.normalize_tag(chip)
+        if not tag:
+            chip_warning = (
+                f"未识别的芯片 {chip!r}，已按「全部芯片」返回，未做过滤。"
+                f"可用取值：{', '.join(facts.TAG_ORDER)}"
+            )
 
     by_chip = r.support_by_api(api)  # 文档标签，aggregated across 同名文档
     csv_rows = r.support(api)  # CSV 支持矩阵
@@ -253,9 +282,10 @@ def api_support(
             slot["total"] += 1
             slot["supported"] += 1 if row["supported"] else 0
 
-    return {
+    result = {
         "api": api,
-        "chip": chip or "all",
+        "chip": tag or "all",
+        "chip_filter_applied": bool(tag),
         "found": found,
         "by_chip": by_chip,
         "by_doc": by_doc,
@@ -264,6 +294,9 @@ def api_support(
         "conflicts": conflicts,
         "verdict": verdict,
     }
+    if chip_warning:
+        result["warning"] = chip_warning
+    return result
 
 
 def chip_apis(
@@ -475,8 +508,12 @@ def gen_ut(
     if not out_root.is_absolute():
         out_root = config.REPO_ROOT / out_root
     out_root.mkdir(parents=True, exist_ok=True)
-    filename = f"ut_{args['api'].lower()}_{resolved_type}.cpp"
-    target = out_root / filename
+    # 文件名里的 api 只保留标识符字符：`api="../../x"` 否则会让 target 逃出 out_root
+    safe_api = re.sub(r"[^A-Za-z0-9_]", "_", args["api"])[:64] or "api"
+    filename = f"ut_{safe_api.lower()}_{resolved_type}.cpp"
+    target = (out_root / filename).resolve()
+    if out_root.resolve() not in target.parents:
+        return {"error": f"输出路径越界：{target}"}
 
     cmd = [
         sys.executable, str(script),
