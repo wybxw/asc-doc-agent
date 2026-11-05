@@ -1,6 +1,6 @@
 """LLM 客户端：OpenAI 兼容的 chat.completions + function calling。
 
-为什么不深度绑定某一家：作业要求「用标准 function calling 打通」，而
+为什么不深度绑定某一家：工具面全部用标准 function calling 暴露，而
 DeepSeek / 通义 / vLLM / Ollama 都提供 OpenAI 兼容端点，只要 base_url +
 api_key + model 三个值即可切换。真需要换协议时，只需再写一个同接口的类。
 
