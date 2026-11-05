@@ -40,13 +40,17 @@ python -m asc_agent index
 # 2) 离线跑通整条链路（不需要任何 API key）
 python -m asc_agent ask "Cast 怎么用" --offline --trace
 
-# 3) 接真实模型（任意 OpenAI 兼容端点：DeepSeek / 通义 / vLLM / OpenAI）
+# 3) 接真实模型（任意 OpenAI 兼容端点）
 export ASC_AGENT_API_KEY=sk-xxx
 export ASC_AGENT_BASE_URL=https://api.deepseek.com/v1
-export ASC_AGENT_MODEL=deepseek-chat
-python -m asc_agent ask "Matmul 的 tiling 怎么配"
-python -m asc_agent chat            # 多轮
+export ASC_AGENT_MODEL=deepseek-flash     # DeepSeek 官方：deepseek-flash / deepseek-v4-pro
+python -m asc_agent ask "Matmul 的 tiling 怎么配" --trace
+python -m asc_agent chat                  # 多轮（自动保留最近 6 轮上下文）
 ```
+
+> 模型名以服务端 `/v1/models` 为准，写错会直接报 model not found。
+> 也可换通义 / vLLM / Ollama 等任何 OpenAI 兼容端点，只改 `ASC_AGENT_BASE_URL`。
+> 不加 `--offline` 且缺 key 时会退回离线模式并提示。
 
 常用子命令：`ask`（单问）、`chat`（多轮）、`tools`（列工具）、`workflows`（列工作流）、
 `serve`（只起 MCP server，供 Claude Desktop / Cursor 等客户端连）、`index`（重建索引）。

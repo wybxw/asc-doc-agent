@@ -310,9 +310,14 @@ description: AscendC API 单元测试技能。当用户需要为新 API 编写 U
       "confidence": "high",
       "summary": "api_310b_support.csv 的 Path 是相对 docs/zh/api/SIMD-API/ 的短路径，api_910b_support.csv 是 docs/zh/... 全路径；直接 JOIN 会大面积对不上",
       "scope": {},
-      "tags": [],
+      "tags": [
+        "csv",
+        "支持性",
+        "路径",
+        "资料库"
+      ],
       "updated": "2026-11-05",
-      "score": 21.1
+      "score": 27.1
     },
     {
       "id": "exp-support-differs-by-impl-dir",
@@ -321,10 +326,21 @@ description: AscendC API 单元测试技能。当用户需要为新 API 编写 U
       "status": "verified",
       "confidence": "high",
       "summary": "Exp 在 regbase / membase / adv 三处各有一篇文档，910B 上 regbase 版不支持、membase 版支持，按 API 名查支持性会得出矛盾结论",
-      "scope": {},
-      "tags": [],
+      "scope": {
+        "api": [
+          "Exp",
+          "Cast",
+          "Add"
+        ]
+      },
+      "tags": [
+        "支持性",
+        "同名文档",
+        "Exp",
+        "粒度"
+      ],
       "updated": "2026-11-05",
-      "score": 10.1
+      "score": 13.1
     }
   ],
   "source": "personal_knowledge_card",

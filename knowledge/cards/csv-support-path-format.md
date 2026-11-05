@@ -6,12 +6,18 @@ status: verified
 confidence: high
 summary: api_310b_support.csv 的 Path 是相对 docs/zh/api/SIMD-API/ 的短路径，api_910b_support.csv 是 docs/zh/...
   全路径；直接 JOIN 会大面积对不上
+tags:
+- csv
+- 支持性
+- 路径
+- 资料库
 evidence:
 - kind: doc
-  path: asc-devkit/api_310b_support.csv
+  path: api_310b_support.csv
   note: Path 列格式与 Status 取值差异可直接对照两个 CSV 看出
 verified_on:
   cann: 9.0.0
+  date: '2026-11-05'
 created: '2026-11-05'
 updated: '2026-11-05'
 ---

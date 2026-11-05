@@ -5,13 +5,24 @@ type: feature
 status: verified
 confidence: high
 summary: Exp 在 regbase / membase / adv 三处各有一篇文档，910B 上 regbase 版不支持、membase 版支持，按 API 名查支持性会得出矛盾结论
+scope:
+  api:
+  - Exp
+  - Cast
+  - Add
+tags:
+- 支持性
+- 同名文档
+- Exp
+- 粒度
 evidence:
 - kind: doc
   path: docs/zh/api/SIMD-API/basic_api/memory_vector_compute/basic_arithmetic/Exp.md
   note: 该文件夹与 reg_vector_compute 版的「产品支持情况」章节对照即可
 verified_on:
-  chip: ascend910b
+  chip: ascend910b1
   cann: 9.0.0
+  date: '2026-11-05'
 relations:
 - type: related
   target: csv-support-path-format

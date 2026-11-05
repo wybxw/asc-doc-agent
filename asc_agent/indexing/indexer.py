@@ -138,9 +138,19 @@ def build_index(
     extra_roots: list[Path] | None = None,
     verbose: bool = True,
 ) -> BuildStats:
-    """全量重建索引（先删库文件，保证结构一致）。"""
+    """全量重建索引（先删库文件，保证结构一致）。
+
+    资料库不存在、或一条文档都没解析出来时**直接报错**，不留下空索引：
+    空索引会让后续所有查询都「查不到」，而这个失败模式看起来完全正常
+    （索引命令退出码 0、检索也不报错），排查成本极高。
+    """
     db_path = db_path or config.INDEX_DB
     devkit_root = devkit_root or config.DEVKIT_ROOT
+    if not Path(devkit_root).exists():
+        raise FileNotFoundError(
+            f"资料库根目录不存在：{devkit_root}\n"
+            "请用 --devkit 指定 asc-devkit 路径，或先克隆 asc-devkit 到仓库同级。"
+        )
     db_path.parent.mkdir(parents=True, exist_ok=True)
     for suffix in ("", "-wal", "-shm"):
         f = Path(str(db_path) + suffix)
@@ -231,6 +241,19 @@ def build_index(
                 )
             if verbose and stats.files % 500 == 0:
                 print(f"  已解析 {stats.files} 篇 / {stats.chunks} 块 ...")
+
+    # 一条都没解析到 = 资料库布局不对（换了路径/空目录/只给了 examples 之外的目录）。
+    # 此时必须报错并清掉半成品库，否则后续检索会全部「查不到」却毫无提示。
+    if not doc_rows:
+        conn.close()
+        for suffix in ("", "-wal", "-shm"):
+            f = Path(str(db_path) + suffix)
+            if f.exists():
+                f.unlink()
+        raise RuntimeError(
+            f"没有从 {devkit_root} 解析到任何文档。"
+            "请确认该目录下有 docs/zh、examples 或 .agent/skills。"
+        )
 
     # 写 docs，拿回 rowid
     cur = conn.executemany(
@@ -362,13 +385,18 @@ def _load_support_csv(conn: sqlite3.Connection, devkit_root: Path) -> int:
 
 def main() -> None:  # pragma: no cover - CLI 入口
     import argparse
+    import sys
 
     ap = argparse.ArgumentParser(description="构建 CANN 资料助手索引")
     ap.add_argument("--db", default=str(config.INDEX_DB))
     ap.add_argument("--devkit", default=str(config.DEVKIT_ROOT))
     args = ap.parse_args()
     print(f"索引 {args.devkit} -> {args.db}")
-    st = build_index(Path(args.db), Path(args.devkit))
+    try:
+        st = build_index(Path(args.db), Path(args.devkit))
+    except (FileNotFoundError, RuntimeError) as exc:
+        print(f"索引失败：{exc}", file=sys.stderr)
+        raise SystemExit(1) from exc
     print(
         f"完成：{st.files} 篇文档 / {st.chunks} 块 / {st.apis} 个 API 卡片 / "
         f"{st.supported_docs} 条细粒度支持记录 / {st.support_rows} 条 CSV 记录，"

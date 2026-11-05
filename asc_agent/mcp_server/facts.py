@@ -63,10 +63,11 @@ TAG_ORDER = ["950", "a3", "910b", "910", "310p", "310b", "x90", "9030"]
 def normalize_chip(raw: str | None) -> str:
     """把用户口语/文档标签/调用名统一成事实文件里的调用名。
 
-    匹配顺序：精确命中别名 → 事实文件里的正式调用名 → 最长子串匹配。
-    **必须最长优先**：`ascend910b1` 若不先按长度排，会被 `910` 抢先匹配成
-    `ascend910`（初代训练架构），架构号从 2201 错成 1001。
-    无法识别时原样返回（下游会报「未知芯片」，而不是瞎猜一个架构）。
+    匹配顺序：精确别名 → 精确调用名 → **某个调用名的前缀** → 最长子串兜底。
+
+    为什么需要「前缀」这一步：`ascend910b` 既是 `ascend910`（1001）的超串、
+    又是 `ascend910b1`（2201）的前缀。只做子串匹配会把 `ascend910b` 判成初代
+    训练架构 1001——架构号直接答错，而且看起来完全合理，极难发现。
     """
     if not raw:
         return ""
@@ -76,6 +77,10 @@ def normalize_chip(raw: str | None) -> str:
     known = chip_table()
     if key in known:
         return key
+    # 前缀匹配：`ascend910b` → `ascend910b1`。取最短的候选，最接近用户说的那一档。
+    prefixed = sorted((n for n in known if n.startswith(key)), key=len)
+    if prefixed:
+        return prefixed[0]
     for alias in sorted(CHIP_ALIASES, key=len, reverse=True):
         if alias in key:
             return CHIP_ALIASES[alias]

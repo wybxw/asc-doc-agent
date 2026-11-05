@@ -182,6 +182,21 @@ def test_chip_facts_alias_normalization():
         assert out["chip"]["normalized"] == "ascend910b1", alias
 
 
+def test_chip_facts_full_name_does_not_degrade_to_910():
+    """`ascend910b` 是 `ascend910` 的超串、`ascend910b1` 的前缀。
+
+    只做子串匹配会把它判成初代训练架构（1001），而正确值是 2201——
+    这种错法看起来完全合理，是最危险的一类。
+    """
+    out = tools.chip_facts(chip="ascend910b")
+    assert out["chip"]["normalized"] == "ascend910b1"
+    assert out["chip"]["npu_arch"] == "2201"
+
+    assert tools.chip_facts(chip="ascend310b")["chip"]["npu_arch"] == "3002"
+    assert tools.chip_facts(chip="ascend950")["chip"]["npu_arch"] == "3510"
+    assert tools.chip_facts(chip="ascend910")["chip"]["npu_arch"] == "1001"
+
+
 def test_chip_facts_unknown_chip_lists_known():
     out = tools.chip_facts(chip="ascend12345")
     assert out["chip"]["found"] is False
@@ -254,6 +269,39 @@ def test_check_markdown_directory_returns_hint():
 def test_read_doc_directory_returns_hint():
     out = tools.read_doc(path="docs/zh/api")
     assert out["found"] is False and "目录" in out["error"]
+
+
+def test_read_doc_resolves_under_repo_root_too(tmp_path):
+    """相对路径要能在**仓库根**下解析：`gen_ut` 刚生成的 UT 就在 `data/ut_out/`。
+
+    早期实现只按资料库根（asc-devkit）解析，导致「生成完 UT 却读不回来」。
+    """
+    rel_dir = "data/_read_doc_probe"
+    target = config.REPO_ROOT / rel_dir
+    target.mkdir(parents=True, exist_ok=True)
+    (target / "x.cpp").write_text("// probe\n", encoding="utf-8")
+    try:
+        out = tools.read_doc(path=f"{rel_dir}/x.cpp")
+        assert out["found"] is True, out
+    finally:
+        import shutil
+
+        shutil.rmtree(target, ignore_errors=True)
+
+
+def test_check_markdown_resolves_under_repo_root_too():
+    rel_dir = "data/_lint_probe"
+    target = config.REPO_ROOT / rel_dir
+    target.mkdir(parents=True, exist_ok=True)
+    (target / "doc.md").write_text("# 标题\n\n正文。\n", encoding="utf-8")
+    try:
+        out = tools.check_markdown(path=f"{rel_dir}/doc.md")
+        assert not out.get("error"), out
+        assert out["total_rules"] > 0
+    finally:
+        import shutil
+
+        shutil.rmtree(target, ignore_errors=True)
 
 
 def test_gen_ut_sanitizes_api_name_in_output_path(tmp_path):

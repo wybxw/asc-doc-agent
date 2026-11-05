@@ -11,7 +11,7 @@ import re
 from pathlib import Path
 
 from asc_agent import config
-from asc_agent.mcp_server.docs import resolve
+from asc_agent.mcp_server.docs import locate
 
 # --- 规则 1：中文标点 & 中英文之间不加空格 -------------------------------
 SPACE_CJK_EN = re.compile(
@@ -182,9 +182,13 @@ def _in_support_section(lines: list[str], lineno: int) -> bool:
 
 
 def check_markdown(path: str, max_issues: int = 40) -> dict:
-    """执行可机器判定的规范检查，返回报告字典。"""
+    """执行可机器判定的规范检查，返回报告字典。
+
+    相对路径在资料库根与仓库根下依次解析（与 `read_doc` 一致），
+    这样既能查 `asc-devkit` 里的官方文档，也能查自己写到仓库里的新文档。
+    """
     try:
-        p: Path = resolve(path)
+        p: Path = locate(path)
     except ValueError as exc:
         return {"path": path, "passed": 0, "total_rules": 0, "issues": [], "error": str(exc)}
     if not p.exists():

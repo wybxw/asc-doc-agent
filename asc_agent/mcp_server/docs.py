@@ -19,10 +19,10 @@ class PathOutsideRepo(ValueError):
     """请求的路径跑出了资料库根目录。"""
 
 
-def resolve(rel_path: str) -> Path:
+def resolve(rel_path: str, root: Path | None = None) -> Path:
     """把路径解析成绝对路径。
 
-    相对路径按资料库根解析并挡住目录穿越（防止 `../../etc/passwd`）；
+    相对路径默认按资料库根解析并挡住目录穿越（防止 `../../etc/passwd`）；
     **绝对路径原样使用**——用户要检查自己写的文档时给的就是绝对路径，
     限制成只能在资料库内会让这个能力没法用。
     """
@@ -32,11 +32,40 @@ def resolve(rel_path: str) -> Path:
     candidate = Path(raw)
     if candidate.is_absolute():
         return candidate.resolve()
-    root = config.DEVKIT_ROOT.resolve()
-    target = (root / raw.replace("\\", "/").lstrip("/")).resolve()
-    if root != target and root not in target.parents:
+    base = (root or config.DEVKIT_ROOT).resolve()
+    target = (base / raw.replace("\\", "/").lstrip("/")).resolve()
+    if base != target and base not in target.parents:
         raise PathOutsideRepo(f"路径越界：{rel_path}")
     return target
+
+
+# 相对路径的两个基准根：资料库（上游只读）与本仓库（生成的 UT、知识卡片、
+# 自己写的文档都在这边）。只认一个基准会读不到「刚生成的文件」这种最常见的情况。
+ROOTS = (config.DEVKIT_ROOT, config.REPO_ROOT)
+
+
+def locate(rel_path: str) -> Path:
+    """在资料库根和仓库根里依次查找相对路径，返回第一个存在的。
+
+    绝对路径直通。两个根都找不到时返回按资料库根解析的结果，让调用方
+    继续走「文件不存在」的分支。
+    """
+    raw = (rel_path or "").strip()
+    if not raw:
+        raise PathOutsideRepo("路径为空")
+    if Path(raw).is_absolute():
+        return resolve(raw)
+    first: Path | None = None
+    for base in ROOTS:
+        try:
+            target = resolve(raw, root=base)
+        except PathOutsideRepo:
+            continue
+        if first is None:
+            first = target
+        if target.exists():
+            return target
+    return first or resolve(raw)
 
 
 def split_sections(text: str) -> list[tuple[str, int, str]]:
@@ -52,13 +81,23 @@ def split_sections(text: str) -> list[tuple[str, int, str]]:
 
 
 def read_doc(rel_path: str, section: str | None = None, max_chars: int = DEFAULT_MAX_CHARS) -> dict:
-    """读一篇文档（可只取命中章节）。"""
+    """读一篇文档（可只取命中章节）。
+
+    相对路径会在**资料库根**和**仓库根**下依次解析：前者是官方文档，后者是
+    `data/ut_out/` 里刚生成的 UT、自己写的文档等。只认资料库根会导致
+    「生成完 UT 却读不回来」。
+    """
     try:
-        path = resolve(rel_path)
+        path = locate(rel_path)
     except PathOutsideRepo as exc:
         return {"path": rel_path, "found": False, "error": str(exc)}
     if not path.exists():
-        return {"path": rel_path, "found": False, "error": "文件不存在"}
+        return {
+            "path": rel_path,
+            "found": False,
+            "error": "文件不存在（已在资料库根与仓库根下查找）",
+            "searched_roots": [str(r) for r in ROOTS],
+        }
     if path.is_dir():
         return {
             "path": rel_path,
